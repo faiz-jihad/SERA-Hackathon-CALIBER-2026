@@ -1,0 +1,8 @@
+flowchart TD
+    A[Phase 1: Raw Ingestion<br>Excel Telemetry & Workbooks] --> B[Phase 2: Validation & Normalization<br>Schema, Types, Units, Imputation]
+    B --> C[Phase 3: Relational Persistence<br>Equipment, Telemetry, Incidents]
+    C --> D[Phase 4: Engineering Analytics<br>Slopes, FFT Ratios, 'What Changed?']
+    D --> E[Phase 5: Rule Provenance Evaluation<br>ISO 10816-3, OEM Limits, Alarm Flags]
+    E --> F[Phase 6: RCA & Historical Synthesis<br>TF-IDF Retrieval, 5-Why Fault Tree]
+    F --> G[Phase 7: Action Plan Formulation<br>SAP PM01 Work Order & Tooling Specs]
+    G --> H[Phase 8: Closed-Loop Verification<br>Post-Turnaround Delta Verification]

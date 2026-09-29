@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Local cache & temporary files
+.pip_cache/
+.tmp/
+.pytest_cache/
+*.log
+
+# Databases & local data state
+*.db
+*.sqlite
+*.sqlite3
+sera/backend/sera.db
+
+# Frontend
+node_modules/
+sera/frontend/node_modules/
+sera/frontend/dist/
+.npm/
+
+# IDE & Editor
+.idea/
+*.swp
+*.swo
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store

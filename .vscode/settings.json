@@ -1,0 +1,10 @@
+{
+  "python.analysis.extraPaths": [
+    "./sera/backend",
+    "./sera"
+  ],
+  "python.autoComplete.extraPaths": [
+    "./sera/backend",
+    "./sera"
+  ]
+}

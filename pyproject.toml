@@ -1,0 +1,11 @@
+[tool.pyright]
+extraPaths = [
+    "sera/backend",
+    "sera"
+]
+
+[tool.pylance]
+extraPaths = [
+    "sera/backend",
+    "sera"
+]

@@ -1,0 +1,34 @@
+flowchart TD
+    subgraph Presentation [Frontend Tier - React 18 TypeScript]
+        UI[TailAdmin Light Synoptic Dashboard]
+        SCHEM[Mechanical Train Drivetrain Schematic]
+        GAUGE[Industrial SCADA Linear Operating Gauges]
+        TREE[Deterministic 5-Why Fault Tree Card]
+        WO[SAP PM01 Maintenance Work Order Card]
+        AUTH[RBAC Persona Authentication & Guards]
+    end
+
+    subgraph Gateway [API Gateway - FastAPI]
+        ROUTER[FastAPI REST Routing & Validation]
+        CORS[CORS Middleware & Exception Handlers]
+        AUTH_MW[Session & Role Authorization Middleware]
+    end
+
+    subgraph CoreEngine [SERA Intelligence Engine]
+        INGEST[Data Ingestion & Normalizer]
+        ANALYTICS[Feature Engineering & Multi-Period Trend Slopes]
+        RULE_ENG[Deterministic Rule Provenance Engine]
+        EVIDENCE[Evidence Aggregator & 'What Changed?' Comparator]
+        RETRIEVE[Historical Case Retrieval - TF-IDF Cosine Matcher]
+        AI_AGENT[SERA AI Reasoning & Synthesis Agent]
+        REVIEW[Engineer Review & Audit Trail Manager]
+        VERIF[Follow-Up Verification Engine]
+    end
+
+    subgraph Persistence [Database Tier]
+        DB[(Relational DB: SQLite / PostgreSQL)]
+    end
+
+    Presentation <--> Gateway
+    Gateway --> CoreEngine
+    CoreEngine <--> Persistence
