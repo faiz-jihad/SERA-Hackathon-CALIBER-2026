@@ -25,6 +25,12 @@ export const en = {
   navIngestion: "Data Ingestion Hub",
   navSettings: "Settings",
 
+  // Sidebar Group Names
+  sidebarGroupOverview: "OVERVIEW",
+  sidebarGroupInvestigation: "INVESTIGATION",
+  sidebarGroupEngineering: "ENGINEERING",
+  sidebarGroupData: "DATA",
+
   // Status Badges
   statusNormal: "NORMAL",
   statusWarning: "WARNING",
@@ -50,6 +56,8 @@ export const en = {
   kpiProductionLoss30d: "30-Day Production Loss",
   hours: "hrs",
   financialCurrency: "$",
+  unitAssets: "Assets",
+  unitActive: "Active",
 
   // Critical Alert Banner
   criticalAlertTitle: "CRITICAL RELIABILITY EVENT REQUIRING IMMEDIATE ACTION",
@@ -75,6 +83,27 @@ export const en = {
   filterAll: "All Assets",
   filterCritical: "Critical / Alarm Only",
 
+  // Equipment List Page
+  eqListPageTitle: "Plant Machinery & Asset Fleet",
+  eqListPageSubtitle: "Monitored Critical Machines with Continuous Telemetry Stream",
+  eqListRefreshBtn: "REFRESH FLEET",
+  eqListScopeMonitored: "Case 2 Monitored Assets",
+  eqListScopeAll: "All Historical Assets",
+  eqListSearchPlaceholder: "Search by tag, name, type...",
+  eqListSectionMonitored: "Case 2 Critical Rotating & Static Equipment",
+  eqListSectionAll: "Asset Inventory Records",
+  eqListShowing: "Showing",
+  eqListUnits: "Units",
+  eqListDiscipline: "Discipline / Type:",
+  eqListTelemetryStream: "Telemetry Stream:",
+  eqListCurrentReading: "Current Reading:",
+  eqListWeeklyRecords: "26 Weekly Records",
+  eqListDataNA: "DATA NOT AVAILABLE",
+  eqListActiveStream: "Case 2 Active Stream",
+  eqListIncidentLog: "Incident Log Registry",
+  eqListInvestigateBtn: "INVESTIGATE",
+  eqListNoSensors: "No Live Sensors",
+
   // Equipment Detail
   equipmentDetailTitle: "Equipment Health & Reliability Profile",
   tabOverview: "01 Overview & Telemetry",
@@ -87,6 +116,45 @@ export const en = {
   tabRecommendations: "08 Action Plan",
   tabReview: "09 Engineer Review",
   tabFollowUp: "10 Follow-up ('Did It Work?')",
+
+  // Equipment Detail Page Tabs
+  eqDetailTabOverview: "Overview",
+  eqDetailTabTrend: "Trend",
+  eqDetailTabFFT: "Frequency / FFT",
+  eqDetailTabStats: "Statistics",
+  eqDetailTabEvents: "Events",
+  eqDetailSignalLabel: "SIGNAL:",
+  eqDetailSyncBtn: "SYNC DATA",
+  eqDetailConditionLabel: "CONDITION:",
+  eqDetailConditionAttention: "ATTENTION",
+  eqDetailConditionNormal: "NORMAL",
+  eqDetailReturnDash: "Return to Dashboard",
+  eqDetailOverallVib: "Overall Vibration",
+  eqDetailHarmonic2X: "2X Harmonic",
+  eqDetailCouplingOffset: "Coupling Offset",
+  eqDetailBearingTemp: "DE Bearing Temp",
+  eqDetailFFTTitle: "Rotational Spectral Harmonics (FFT Decomposition)",
+  eqDetailFFTDesc: "Physical vibration signature comparison: 1X (Unbalance) vs 2X (Misalignment) vs High Frequency Bearing Envelope.",
+  eqDetailFFT1X: "1X COMPONENT (UNBALANCE)",
+  eqDetailFFT2X: "2X COMPONENT (MISALIGNMENT)",
+  eqDetailFFTBearing: "HIGH-FREQ BEARING ENVELOPE",
+  eqDetailFFT2XTrip: "EXCEEDS TRIP LIMIT (≥ 5.0 mm/s)",
+  eqDetailFFT1XNormal: "NORMAL (Below ISO 10816 limit)",
+  eqDetailFFTBearingNormal: "NORMAL (No inner/outer raceway fault)",
+  eqDetailStatsTitle: "Telemetry Statistical Metrics",
+  eqDetailStatsSubtitle: "Strictly calculated from project data",
+  eqDetailStatsRecords: "Periodic Records",
+  eqDetailStatsSampleCount: "Sample Count",
+  eqDetailStatsMin: "Minimum Reading",
+  eqDetailStatsMax: "Maximum Reading",
+  eqDetailStatsMean: "Arithmetic Mean",
+  eqDetailEventsWeek: "Week",
+  eqDetailEventsDate: "Date",
+  eqDetailEventsVib: "Vibration (mm/s)",
+  eqDetailEventsHarmonic: "2X Harmonic (mm/s)",
+  eqDetailEventsOffset: "Coupling Offset (mm)",
+  eqDetailEventsBearingTemp: "Bearing Temp (°C)",
+  eqDetailEventsCondition: "Condition Status",
 
   // Telemetry Cards
   paramVibration: "Vibration Velocity RMS",
@@ -202,6 +270,19 @@ export const en = {
   recoveredText: "CONDITION RETURNED TOWARD NORMAL BASELINE",
   verifiedByLabel: "Verified By Lead Engineer",
 
+  // Follow-Up Page KPIs
+  followUpKpiVerified: "Verified Work Orders",
+  followUpKpiVerifiedUnit: "Actions",
+  followUpKpiVerifiedSub: "All post-maintenance checks",
+  followUpKpiVibReduction: "Average Vibration Reduction",
+  followUpKpiVibSub: "Pre- vs post-turnaround",
+  followUpKpiVibTrend: "Condition Restored",
+  followUpKpiOffsetRecovery: "Coupling Offset Recovery",
+  followUpKpiOffsetSub: "Precision alignment verification",
+  followUpKpiOffsetTrend: "Within tolerance (<0.05)",
+  followUpSectionTitle: "Post-Maintenance Verification Records",
+  followUpSectionSubtitle: "Before vs after parameter comparison confirming condition restoration",
+
   // Ingestion Hub
   ingestionTitle: "Data Ingestion & Telemetry Processing Hub",
   ingestionSubtitle: "Upload, validate, and normalize plant Excel workbooks into normalized database tables",
@@ -264,4 +345,22 @@ export const en = {
   accessDenied: "Access Restricted",
   accessDeniedDesc: "Your current role does not have authorization to perform this action.",
   unauthorizedWarning: "Lead Engineer sign-off is required to authorize or reject turnaround work orders.",
+
+  // Dashboard Page
+  dashboardBadge: "MANUFACTURING INTELLIGENCE",
+  dashboardTitle: "Equipment Health & Reliability Investigation Console",
+  dashboardSubtitle: "Plant Context: Polymer Plant (OPP) & Unit 05 Synthesis Gas Fleet • CALIBER 2026 Case 2",
+  dashboardSyncBtn: "SYNC TELEMETRY",
+  dashboardKpiMonitored: "Monitored Equipment",
+  dashboardKpiMonitoredSub: "Case 2 Critical Rotating Assets",
+  dashboardKpiNormal: "Normal",
+  dashboardKpiNormalSub: "Operating within baseline limits",
+  dashboardKpiAttention: "Attention Required",
+  dashboardKpiAttentionSub: "Threshold breach detected",
+  dashboardKpiActive: "Active Investigations",
+  dashboardKpiActiveSub: "Root Cause Analysis in progress",
+  dashboardFleetHeader: "Monitored Equipment Fleet Overview",
+  dashboardFleetSubtitle: "Select an asset card below to inspect its time-series telemetry and condition assessment",
+  dashboardFleetUnits: "Monitored Units",
+  dashboardInvBadge: "MAIN INVESTIGATION VISUAL",
 };

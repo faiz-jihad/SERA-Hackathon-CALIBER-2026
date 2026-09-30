@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { Search, RefreshCw, Clock, DollarSign, X } from 'lucide-react'
+import { Search, RefreshCw, X } from 'lucide-react'
 import { useLanguage } from '../context/LanguageContext'
 import { getIncidents, IncidentRecord } from '../api/client'
-import StatusBadge from '../components/StatusBadge'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 
+function severityClass(sev?: string) {
+  if (!sev) return 'text-slate-500 bg-slate-50 border-slate-200'
+  const s = sev.toUpperCase()
+  if (s === 'HIGH' || s === 'CRITICAL') return 'text-red-700 bg-red-50 border-red-300'
+  if (s === 'MEDIUM') return 'text-amber-700 bg-amber-50 border-amber-300'
+  return 'text-emerald-700 bg-emerald-50 border-emerald-200'
+}
+
 export const IncidentsPage: React.FC = () => {
   const { t } = useLanguage()
-  const [searchParams] = useSearchParams()
-  const highlightId = searchParams.get('highlight')
-
   const [incidents, setIncidents] = useState<IncidentRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -24,186 +27,211 @@ export const IncidentsPage: React.FC = () => {
     try {
       const data = await getIncidents()
       setIncidents(data)
-      if (highlightId) {
-        const target = data.find((i) => i.id === highlightId)
-        if (target) setSelectedIncident(target)
-      }
     } catch (err: any) {
-      setError(err?.message || 'Failed to load historical incidents')
+      setError(err?.message || 'Failed to load incident records')
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    fetchIncidents()
-  }, [])
+  useEffect(() => { fetchIncidents() }, [])
 
-  const filtered = incidents.filter((i) => {
+  const filtered = incidents.filter(i => {
     const q = search.toLowerCase()
     return (
       i.equipment_id.toLowerCase().includes(q) ||
-      (i.incident_title ? i.incident_title.toLowerCase().includes(q) : false) ||
-      (i.problem ? i.problem.toLowerCase().includes(q) : false) ||
-      (i.root_cause ? i.root_cause.toLowerCase().includes(q) : false)
+      (i.incident_title || '').toLowerCase().includes(q) ||
+      (i.problem || '').toLowerCase().includes(q) ||
+      (i.root_cause || '').toLowerCase().includes(q)
     )
   })
 
   return (
-    <div className="space-y-6 font-sans">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 pb-4">
+    <div className="space-y-4 font-sans text-slate-800">
+
+      {/* Page Header */}
+      <div className="border-b border-slate-200 pb-3 flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            {t('navIncidents')}
-          </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Historical Plant Equipment Failures, Root Causes, and Proven Corrective Actions ({incidents.length} Records)
+          <h1 className="text-lg font-bold text-slate-900 tracking-tight">{t('navIncidents')}</h1>
+          <p className="text-xs font-mono text-slate-500 mt-0.5">
+            Historical plant equipment failures, root causes, and corrective actions
           </p>
         </div>
-
-        <button
-          onClick={fetchIncidents}
-          disabled={loading}
-          className="flex items-center gap-2 self-start sm:self-auto rounded-sm border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:border-primary hover:text-primary transition-all shadow-xs"
-        >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          <span>{t('refresh')}</span>
-        </button>
-      </div>
-
-      {/* Search Bar */}
-      <div className="flex items-center rounded-sm border border-slate-200 bg-white p-4 shadow-xs">
-        <div className="relative flex-1 max-w-md">
-          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by equipment tag, problem symptom, or root cause..."
-            className="w-full rounded-sm border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:border-primary focus:bg-white focus:outline-none shadow-xs"
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search equipment, problem, RCA..."
+              className="border border-slate-300 bg-white pl-8 pr-3 py-1.5 text-xs font-mono text-slate-800 focus:outline-none focus:border-slate-500 rounded-sm w-64 placeholder-slate-400"
+            />
+          </div>
+          <button
+            onClick={fetchIncidents}
+            disabled={loading}
+            className="flex items-center gap-1.5 border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-sm disabled:opacity-50"
+          >
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </button>
         </div>
       </div>
 
-      {/* Incident List */}
-      {loading ? (
-        <LoadingState />
-      ) : error ? (
-        <ErrorState message={error} onRetry={fetchIncidents} />
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((inc) => {
-            const isHighlight = inc.id === highlightId
-            return (
-              <div
-                key={inc.id}
-                onClick={() => setSelectedIncident(inc)}
-                className={`flex cursor-pointer flex-col justify-between rounded-sm border p-5 transition-all duration-150 shadow-xs ${
-                  isHighlight
-                    ? 'border-amber-400 bg-amber-50/30 ring-1 ring-amber-400'
-                    : 'border-slate-200 bg-white hover:border-primary hover:bg-blue-50/30'
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-3">
-                    <span className="font-mono text-xs font-bold text-amber-600">
-                      {inc.equipment_id}
+      {/* Incidents Table */}
+      <div className="border border-slate-200 bg-white rounded-sm">
+        <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 flex items-center justify-between">
+          <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-slate-500">
+            Incident Registry
+          </span>
+          <span className="font-mono text-[10px] text-slate-400">
+            {filtered.length} of {incidents.length} records
+          </span>
+        </div>
+
+        {loading ? (
+          <LoadingState message="Loading incident records..." />
+        ) : error ? (
+          <ErrorState message={error} onRetry={fetchIncidents} />
+        ) : (
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50/50">
+                <th className="text-left px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500 w-24">Date</th>
+                <th className="text-left px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500 w-24">Equipment</th>
+                <th className="text-left px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500">Problem / Incident</th>
+                <th className="text-left px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500">Root Cause</th>
+                <th className="text-right px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500">Downtime</th>
+                <th className="text-right px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500">Loss (USD)</th>
+                <th className="text-center px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-500">Severity</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center font-mono text-xs text-slate-400">
+                    No incidents match the current search
+                  </td>
+                </tr>
+              ) : filtered.map(inc => (
+                <tr
+                  key={inc.id}
+                  onClick={() => setSelectedIncident(inc)}
+                  className="cursor-pointer hover:bg-slate-50 transition-colors"
+                >
+                  <td className="px-4 py-2.5 font-mono text-slate-500 whitespace-nowrap">
+                    {inc.incident_date || '—'}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span className="font-mono font-bold text-amber-700">{inc.equipment_id}</span>
+                  </td>
+                  <td className="px-4 py-2.5 text-slate-800 max-w-xs">
+                    <span className="line-clamp-1">{inc.incident_title || inc.problem || '—'}</span>
+                  </td>
+                  <td className="px-4 py-2.5 text-slate-600 max-w-xs">
+                    <span className="line-clamp-1">{inc.root_cause || '—'}</span>
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono text-slate-700">
+                    {inc.downtime_hours != null ? `${inc.downtime_hours} h` : '—'}
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono text-slate-700">
+                    {inc.financial_loss != null
+                      ? `$${Number(inc.financial_loss).toLocaleString()}`
+                      : '—'}
+                  </td>
+                  <td className="px-4 py-2.5 text-center">
+                    <span className={`border px-1.5 py-0.5 font-mono text-[10px] font-bold rounded-sm ${severityClass(inc.severity)}`}>
+                      {inc.severity || 'UNCLASSIFIED'}
                     </span>
-                    <span className="font-mono text-xs text-slate-500">{inc.incident_date}</span>
-                  </div>
-                  <h3 className="text-sm font-bold text-slate-900 line-clamp-1 mb-1.5">
-                    {inc.incident_title || inc.problem}
-                  </h3>
-                  <p className="text-xs text-slate-500 font-mono mb-3">
-                    <strong className="text-slate-800">RCA:</strong> {inc.root_cause}
-                  </p>
-                </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
 
-                <div className="pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
-                  <div className="flex items-center gap-1 font-mono">
-                    <Clock size={13} className="text-slate-400" />
-                    <span>{inc.downtime_hours || 0} hrs</span>
-                  </div>
-                  <div className="flex items-center gap-1 font-mono text-red-600 font-semibold">
-                    <DollarSign size={13} />
-                    <span>${Number(inc.financial_loss || 0).toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Incident Detail Modal */}
+      {/* Detail Modal */}
       {selectedIncident && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-xl rounded-sm border border-slate-200 bg-white p-6 shadow-2xl space-y-5">
-            <div className="flex items-start justify-between border-b border-slate-200 pb-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-sm font-bold text-amber-600">
-                    {selectedIncident.equipment_id}
-                  </span>
-                  <StatusBadge status="RESOLVED" size="sm" />
-                </div>
-                <h3 className="text-base font-bold text-slate-900 mt-1">
-                  {selectedIncident.incident_title || selectedIncident.problem}
-                </h3>
-                <span className="font-mono text-xs text-slate-500">
-                  Occurred on {selectedIncident.incident_date}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-2xl border border-slate-200 bg-white rounded-sm shadow-2xl">
+
+            {/* Modal Header */}
+            <div className="border-b border-slate-200 bg-slate-50 px-5 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="font-mono font-bold text-amber-700 text-sm">{selectedIncident.equipment_id}</span>
+                <span className="font-mono text-[10px] text-slate-500">{selectedIncident.incident_date}</span>
+                <span className={`border px-1.5 py-0.5 font-mono text-[10px] font-bold rounded-sm ${severityClass(selectedIncident.severity)}`}>
+                  {selectedIncident.severity || 'UNCLASSIFIED'}
                 </span>
               </div>
               <button
                 onClick={() => setSelectedIncident(null)}
-                className="rounded-sm p-1.5 text-slate-400 hover:text-slate-600"
+                className="p-1 text-slate-400 hover:text-slate-700 rounded-sm"
               >
-                <X size={18} />
+                <X size={16} />
               </button>
             </div>
 
-            <div className="space-y-3.5 text-xs">
-              <div className="rounded-sm bg-slate-50 border border-slate-200 p-3.5">
-                <span className="font-bold uppercase tracking-wider text-red-600 text-[10px] block mb-1">
-                  Root Cause Analysis:
-                </span>
-                <p className="font-mono text-slate-900 leading-relaxed">{selectedIncident.root_cause}</p>
+            <div className="p-5 space-y-4">
+              {/* Title */}
+              <div>
+                <div className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-500 mb-1">Incident</div>
+                <p className="text-sm font-bold text-slate-900">
+                  {selectedIncident.incident_title || selectedIncident.problem || 'No title'}
+                </p>
               </div>
 
-              <div className="rounded-sm bg-slate-50 border border-slate-200 p-3.5">
-                <span className="font-bold uppercase tracking-wider text-emerald-700 text-[10px] block mb-1">
-                  Corrective Action Implemented:
-                </span>
-                <p className="text-slate-700 leading-relaxed">{selectedIncident.corrective_action}</p>
-              </div>
-
-              <div className="rounded-sm bg-slate-50 border border-slate-200 p-3.5">
-                <span className="font-bold uppercase tracking-wider text-primary text-[10px] block mb-1">
-                  Preventive Protocol:
-                </span>
-                <p className="text-slate-700 leading-relaxed">{selectedIncident.preventive_action}</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 text-center font-mono">
-                <div className="rounded-sm border border-slate-200 bg-slate-50 p-3">
-                  <span className="text-[11px] text-slate-500">Downtime Outage</span>
-                  <div className="text-base font-bold text-amber-600 mt-0.5">{selectedIncident.downtime_hours || 0} Hours</div>
+              {/* RCA */}
+              {selectedIncident.root_cause && (
+                <div className="border border-slate-200 bg-slate-50 rounded-sm p-3">
+                  <div className="text-[10px] font-mono font-bold uppercase tracking-widest text-red-700 mb-1">Root Cause Analysis</div>
+                  <p className="text-xs text-slate-800 leading-relaxed">{selectedIncident.root_cause}</p>
                 </div>
-                <div className="rounded-sm border border-slate-200 bg-slate-50 p-3">
-                  <span className="text-[11px] text-slate-500">Financial Loss</span>
-                  <div className="text-base font-bold text-red-600 mt-0.5">
-                    ${Number(selectedIncident.financial_loss || 0).toLocaleString()}
+              )}
+
+              {/* Actions */}
+              <div className="grid grid-cols-2 gap-3">
+                {selectedIncident.corrective_action && (
+                  <div className="border border-slate-200 bg-slate-50 rounded-sm p-3">
+                    <div className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-700 mb-1">Corrective Action</div>
+                    <p className="text-xs text-slate-700 leading-relaxed">{selectedIncident.corrective_action}</p>
+                  </div>
+                )}
+                {selectedIncident.preventive_action && (
+                  <div className="border border-slate-200 bg-slate-50 rounded-sm p-3">
+                    <div className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-600 mb-1">Preventive Protocol</div>
+                    <p className="text-xs text-slate-700 leading-relaxed">{selectedIncident.preventive_action}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Metrics */}
+              <div className="grid grid-cols-2 gap-px border border-slate-200 bg-slate-200 rounded-sm overflow-hidden">
+                <div className="bg-white px-4 py-3 text-center">
+                  <div className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Downtime</div>
+                  <div className="text-xl font-bold font-mono text-amber-700 mt-0.5">
+                    {selectedIncident.downtime_hours != null ? `${selectedIncident.downtime_hours} h` : '—'}
+                  </div>
+                </div>
+                <div className="bg-white px-4 py-3 text-center">
+                  <div className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Financial Loss</div>
+                  <div className="text-xl font-bold font-mono text-red-700 mt-0.5">
+                    {selectedIncident.financial_loss != null
+                      ? `$${Number(selectedIncident.financial_loss).toLocaleString()}`
+                      : '—'}
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end pt-2">
+            <div className="border-t border-slate-200 px-5 py-3 flex justify-end">
               <button
                 onClick={() => setSelectedIncident(null)}
-                className="rounded-sm bg-white border border-slate-200 hover:bg-slate-50 px-5 py-2 text-xs font-semibold text-slate-700 transition-all shadow-xs"
+                className="border border-slate-300 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-sm"
               >
-                {t('close')}
+                Close
               </button>
             </div>
           </div>

@@ -251,12 +251,30 @@ def get_equipment_analysis(equipment_id: str, db: Session = Depends(get_db)):
     )
     if stored_rca:
         similar = stored_rca.similar_incidents or find_similar_incidents(problem_types, equipment_id.upper(), all_incident_dicts)
+        four_p = (stored_rca.evidence or {}).get("four_p_verification", [])
+        four_m = (stored_rca.evidence or {}).get("four_m_one_e_verification", [])
+
+        # Build clean string descriptions for general evidence consumers
+        evidence_list = []
+        for item in four_p:
+            if isinstance(item, dict):
+                code = item.get("code", "")
+                name = item.get("item", "")
+                ev = item.get("evidence", "")
+                res = item.get("result", "")
+                prefix = f"[{code}] " if code else ""
+                suffix = f" ({res})" if res else ""
+                evidence_list.append(f"{prefix}{name}: {ev}{suffix}" if name else f"{prefix}{ev}{suffix}")
+            else:
+                evidence_list.append(str(item))
+
         rca = {
             "primary_root_cause": stored_rca.primary_root_cause,
             "confidence_level": stored_rca.confidence_level,
             "explanation": stored_rca.primary_root_cause,
-            "evidence": (stored_rca.evidence or {}).get("four_p_verification", []),
-            "four_m_one_e": (stored_rca.evidence or {}).get("four_m_one_e_verification", []),
+            "evidence": evidence_list,
+            "four_p_verification": four_p,
+            "four_m_one_e": four_m,
             "ar_number": (stored_rca.evidence or {}).get("ar_number", ""),
             "similar_incidents": similar,
             "all_candidates": [

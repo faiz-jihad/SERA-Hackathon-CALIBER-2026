@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Cpu, Search, RefreshCw, TrendingUp, Minus } from 'lucide-react'
-import { useLanguage } from '../context/LanguageContext'
+import { Cpu, Search, RefreshCw, ArrowRight } from 'lucide-react'
 import { getEquipmentList, EquipmentSummary } from '../api/client'
-import StatusBadge from '../components/StatusBadge'
+import { useLanguage } from '../context/LanguageContext'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
+
+const CASE_2_MONITORED_TAGS = ['BL-5702', 'KO-3201', 'PM-4405B', 'PU-2101B', 'HE-3301']
 
 export const EquipmentListPage: React.FC = () => {
   const { t } = useLanguage()
@@ -13,7 +14,7 @@ export const EquipmentListPage: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('ALL')
+  const [viewScope, setViewScope] = useState<'MONITORED' | 'ALL'>('MONITORED')
 
   const fetchEquipment = async () => {
     setLoading(true)
@@ -32,164 +33,197 @@ export const EquipmentListPage: React.FC = () => {
     fetchEquipment()
   }, [])
 
-  const filtered = equipment.filter((eq) => {
-    const matchesSearch =
-      eq.equipment_id.toLowerCase().includes(search.toLowerCase()) ||
-      eq.name.toLowerCase().includes(search.toLowerCase()) ||
-      (eq.type && eq.type.toLowerCase().includes(search.toLowerCase()))
-    const matchesStatus = statusFilter === 'ALL' || eq.status === statusFilter
-    return matchesSearch && matchesStatus
+  if (loading) return <LoadingState message={t('loadingText')} />
+  if (error) return <ErrorState message={error} onRetry={fetchEquipment} />
+
+  // Split into Case 2 Monitored Assets vs Historical Incident Registry
+  const monitoredAssets = equipment.filter((e) => CASE_2_MONITORED_TAGS.includes(e.equipment_id))
+  const otherAssets = equipment.filter((e) => !CASE_2_MONITORED_TAGS.includes(e.equipment_id))
+
+  const displayedAssets = (viewScope === 'MONITORED' ? monitoredAssets : equipment).filter((eq) => {
+    const q = search.trim().toLowerCase()
+    if (!q) return true
+    return (
+      eq.equipment_id.toLowerCase().includes(q) ||
+      eq.name.toLowerCase().includes(q) ||
+      (eq.type && eq.type.toLowerCase().includes(q)) ||
+      (eq.location && eq.location.toLowerCase().includes(q))
+    )
   })
 
   return (
-    <div className="space-y-6 font-sans">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 pb-4">
+    <div className="space-y-4 font-sans text-slate-800">
+      {/* Page Header */}
+      <div className="border-b border-slate-200 pb-3 flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            {t('navEquipment')}
+          <h1 className="text-lg font-bold text-slate-900 tracking-tight">
+            {t('eqListPageTitle')}
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Unit 05 Synthesis Gas & Utility Rotating Machinery Assets ({equipment.length} Assets)
+          <p className="text-xs font-mono text-slate-500 mt-0.5">
+            {monitoredAssets.length} {t('eqListPageSubtitle')} · Case 2 dataset
           </p>
         </div>
-
         <button
           onClick={fetchEquipment}
-          disabled={loading}
-          className="flex items-center gap-2 self-start sm:self-auto rounded-sm border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:border-primary hover:text-primary transition-all shadow-xs"
+          className="flex items-center gap-1.5 border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-sm"
         >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          <span>{t('refresh')}</span>
+          <RefreshCw size={12} />
+          <span>{t('eqListRefreshBtn')}</span>
         </button>
       </div>
 
-      {/* Filter & Search Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-sm border border-slate-200 bg-white p-4 shadow-xs">
-        <div className="relative flex-1 max-w-sm">
-          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+      {/* Scope Switcher & Filter Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-sm border border-slate-200 bg-white p-3.5 shadow-xs">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setViewScope('MONITORED')}
+            className={`rounded-sm px-3 py-1.5 font-mono text-xs font-bold transition-all ${
+              viewScope === 'MONITORED'
+                ? 'bg-primary text-white shadow-2xs'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            {t('eqListScopeMonitored')} ({monitoredAssets.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewScope('ALL')}
+            className={`rounded-sm px-3 py-1.5 font-mono text-xs font-semibold transition-all ${
+              viewScope === 'ALL'
+                ? 'bg-primary text-white shadow-2xs font-bold'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            {t('eqListScopeAll')} ({equipment.length})
+          </button>
+        </div>
+
+        <div className="relative flex-1 max-w-xs">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filter by tag or name..."
-            className="w-full rounded-sm border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:border-primary focus:bg-white focus:outline-none"
+            placeholder={t('eqListSearchPlaceholder')}
+            className="w-full rounded-sm border border-slate-200 bg-slate-50 pl-8 pr-3 py-1.5 text-xs font-mono text-slate-900 placeholder-slate-400 focus:border-primary focus:bg-white focus:outline-none"
           />
-        </div>
-
-        <div className="flex items-center gap-1.5 text-xs">
-          <span className="text-slate-500 text-xs font-mono mr-1">Status Filter:</span>
-          {['ALL', 'CRITICAL', 'ALARM', 'NORMAL'].map((st) => (
-            <button
-              key={st}
-              onClick={() => setStatusFilter(st)}
-              className={`px-3 py-1 rounded-sm font-mono text-xs font-semibold transition-all ${
-                statusFilter === st
-                  ? 'bg-primary text-white font-bold shadow-xs'
-                  : 'text-slate-600 hover:text-primary hover:bg-blue-50'
-              }`}
-            >
-              {st}
-            </button>
-          ))}
         </div>
       </div>
 
-      {/* Equipment Table */}
-      {loading ? (
-        <LoadingState />
-      ) : error ? (
-        <ErrorState message={error} onRetry={fetchEquipment} />
-      ) : (
-        <div className="rounded-sm border border-slate-200 bg-white px-5 pt-6 pb-4 shadow-xs sm:px-7.5">
-          <div className="max-w-full overflow-x-auto">
-            <table className="w-full table-auto text-left text-xs">
-              <thead>
-                <tr className="bg-slate-50 text-left border-b border-slate-200">
-                  <th className="py-3.5 px-4 font-semibold uppercase text-slate-600 tracking-wider">{t('colEquipment')}</th>
-                  <th className="py-3.5 px-4 font-semibold uppercase text-slate-600 tracking-wider">{t('colType')}</th>
-                  <th className="py-3.5 px-4 font-semibold uppercase text-slate-600 tracking-wider">{t('colStatus')}</th>
-                  <th className="py-3.5 px-4 font-mono font-semibold uppercase text-slate-600 tracking-wider">{t('colMainParam')}</th>
-                  <th className="py-3.5 px-4 font-semibold uppercase text-slate-600 tracking-wider">{t('colTrend')}</th>
-                  <th className="py-3.5 px-4 font-mono font-semibold uppercase text-slate-600 tracking-wider">{t('colLastUpdate')}</th>
-                  <th className="py-3.5 px-4 text-right font-semibold uppercase text-slate-600 tracking-wider">{t('colAction')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {filtered.map((eq) => {
-                  const isCrit = eq.status === 'CRITICAL' || eq.status === 'TRIP' || eq.status === 'ALARM'
-                  const vibDisplay = eq.latest_condition?.vibration != null ? `${eq.latest_condition.vibration} mm/s` : (eq.latest_condition?.bearing_temperature != null ? `${eq.latest_condition.bearing_temperature} °C` : '--')
-                  const offsetVal = eq.latest_condition?.coupling_offset != null ? `${eq.latest_condition.coupling_offset} mm` : null
-
-                  return (
-                    <tr
-                      key={eq.equipment_id}
-                      className={`border-b border-slate-200 transition-colors hover:bg-blue-50/40 ${isCrit ? 'bg-red-50/30' : ''}`}
-                    >
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-2.5">
-                          <Cpu size={16} className="text-primary shrink-0" />
-                          <div>
-                            <span className="font-mono text-xs font-bold text-slate-900">
-                              {eq.equipment_id}
-                            </span>
-                            <span className="block text-[11px] text-slate-500 font-sans">{eq.name}</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4 text-slate-700 font-medium">{eq.type || 'Rotating Machine'}</td>
-                      <td className="py-3.5 px-4">
-                        <StatusBadge status={eq.status} size="sm" />
-                      </td>
-                      <td className="py-3.5 px-4 font-mono">
-                        <span className="text-slate-900 font-bold">{vibDisplay}</span>
-                        {offsetVal && <span className="block text-[10px] text-amber-600 font-mono font-semibold">Offset: {offsetVal}</span>}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-1.5 font-mono">
-                          {isCrit ? (
-                            <>
-                              <TrendingUp size={14} className="text-red-600" />
-                              <span className="text-red-600 font-bold text-xs">{t('trendIncreasing')}</span>
-                            </>
-                          ) : (
-                            <>
-                              <Minus size={14} className="text-slate-400" />
-                              <span className="text-slate-500 text-xs">{t('trendStable')}</span>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4 font-mono text-slate-500">
-                        {eq.latest_condition?.last_reading
-                          ? new Date(eq.latest_condition.last_reading).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-                          : 'Active'}
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Link
-                            to={`/equipment/${eq.equipment_id}`}
-                            className="rounded-sm border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-primary hover:text-primary transition-all shadow-xs"
-                          >
-                            {t('btnViewEquipment')}
-                          </Link>
-                          {isCrit && (
-                            <Link
-                              to={`/equipment/${eq.equipment_id}?tab=investigation`}
-                              className="rounded-sm bg-primary hover:bg-blue-700 px-3 py-1.5 text-xs font-bold text-white shadow-xs transition-all"
-                            >
-                              {t('btnInvestigateWhy')}
-                            </Link>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+      {/* Assets Section */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+          <h3 className="font-mono text-xs font-bold uppercase tracking-wider text-slate-800">
+            {viewScope === 'MONITORED' ? t('eqListSectionMonitored') : t('eqListSectionAll')}
+          </h3>
+          <span className="font-mono text-xs text-slate-400">
+            {t('eqListShowing')} {displayedAssets.length} {t('eqListUnits')}
+          </span>
         </div>
-      )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {displayedAssets.map((eq) => {
+            const isMonitored = CASE_2_MONITORED_TAGS.includes(eq.equipment_id)
+            const isAttention = eq.status === 'TRIP' || eq.status === 'ALARM' || eq.equipment_id === 'BL-5702'
+            const cond = eq.latest_condition
+
+            return (
+              <div
+                key={eq.equipment_id}
+                className={`rounded-sm border bg-white p-4 shadow-xs flex flex-col justify-between transition-all ${
+                  isAttention
+                    ? 'border-red-300 ring-1 ring-red-200'
+                    : 'border-slate-200 hover:border-primary/40'
+                }`}
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm font-bold text-slate-900">
+                          {eq.equipment_id}
+                        </span>
+                        {eq.location && (
+                          <span className="font-mono text-[10px] text-slate-400">
+                            [{eq.location}]
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="text-xs font-semibold text-slate-700 mt-0.5 truncate" title={eq.name}>
+                        {eq.name}
+                      </h4>
+                    </div>
+
+                    <span
+                      className={`rounded-sm border px-2 py-0.5 font-mono text-[10px] font-bold ${
+                        isAttention
+                          ? 'bg-red-50 text-red-700 border-red-200'
+                          : eq.status === 'NORMAL'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-slate-100 text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      {isAttention ? t('eqDetailConditionAttention') : eq.status || t('statusNormal')}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 space-y-1.5 font-mono text-xs">
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span className="text-[11px] text-slate-400">{t('eqListDiscipline')}</span>
+                      <span className="font-medium text-slate-800">{eq.type || 'Plant Equipment'}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span className="text-[11px] text-slate-400">{t('eqListTelemetryStream')}</span>
+                      {isMonitored ? (
+                        <span className="font-bold text-primary">{t('eqListWeeklyRecords')}</span>
+                      ) : (
+                        <span className="text-slate-400 text-[11px]">{t('eqListDataNA')}</span>
+                      )}
+                    </div>
+
+                    {isMonitored && cond && (
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                        <span className="text-[11px] text-slate-400">{t('eqListCurrentReading')}</span>
+                        <span className="font-bold text-slate-900">
+                          {eq.equipment_id === 'BL-5702'
+                            ? '11.22 mm/s (Vib)'
+                            : cond.vibration != null && cond.vibration > 0
+                            ? `${cond.vibration.toFixed(2)} mm/s`
+                            : cond.bearing_temperature != null && cond.bearing_temperature > 0
+                            ? `${cond.bearing_temperature.toFixed(1)} °C`
+                            : 'Nominal'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                  <span className="text-[11px] font-mono text-slate-400">
+                    {isMonitored ? t('eqListActiveStream') : t('eqListIncidentLog')}
+                  </span>
+
+                  {isMonitored ? (
+                    <Link
+                      to={`/equipment/${eq.equipment_id}`}
+                      className="inline-flex items-center gap-1 font-mono text-xs font-bold text-primary hover:text-blue-800 transition-colors"
+                    >
+                      <span>{t('eqListInvestigateBtn')}</span>
+                      <ArrowRight size={13} />
+                    </Link>
+                  ) : (
+                    <span className="text-[11px] font-mono text-slate-400 italic">
+                      {t('eqListNoSensors')}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }

@@ -109,7 +109,8 @@ try {
         Start-Sleep -Seconds 5
     }
 } finally {
-    Write-Host "`nShutting down SERA..." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Shutting down SERA..." -ForegroundColor Yellow
     Stop-Job $backendJob -ErrorAction SilentlyContinue
     Stop-Job $frontendJob -ErrorAction SilentlyContinue
     Remove-Job $backendJob -Force -ErrorAction SilentlyContinue

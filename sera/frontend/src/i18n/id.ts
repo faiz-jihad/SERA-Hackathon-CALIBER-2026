@@ -25,6 +25,12 @@ export const id = {
   navIngestion: "Pusat Ingesti Data",
   navSettings: "Pengaturan",
 
+  // Sidebar Group Names
+  sidebarGroupOverview: "IKHTISAR",
+  sidebarGroupInvestigation: "INVESTIGASI",
+  sidebarGroupEngineering: "REKAYASA",
+  sidebarGroupData: "DATA",
+
   // Status Badges
   statusNormal: "NORMAL",
   statusWarning: "PERINGATAN",
@@ -50,6 +56,8 @@ export const id = {
   kpiProductionLoss30d: "Kehilangan Produksi (30 Hari)",
   hours: "jam",
   financialCurrency: "$",
+  unitAssets: "Aset",
+  unitActive: "Aktif",
 
   // Critical Alert Banner
   criticalAlertTitle: "PERISTIWA KEANDALAN KRITIS MEMERLUKAN TINDAKAN SEGERA",
@@ -75,6 +83,27 @@ export const id = {
   filterAll: "Semua Peralatan",
   filterCritical: "Hanya Kritis / Alarm",
 
+  // Equipment List Page
+  eqListPageTitle: "Mesin Pabrik & Armada Aset",
+  eqListPageSubtitle: "Mesin Kritis Dipantau dengan Stream Telemetri Kontinyu",
+  eqListRefreshBtn: "SEGARKAN ARMADA",
+  eqListScopeMonitored: "Aset Dipantau Case 2",
+  eqListScopeAll: "Semua Aset Historis",
+  eqListSearchPlaceholder: "Cari berdasarkan tag, nama, tipe...",
+  eqListSectionMonitored: "Peralatan Berputar & Statis Kritis Case 2",
+  eqListSectionAll: "Rekaman Inventaris Aset",
+  eqListShowing: "Menampilkan",
+  eqListUnits: "Unit",
+  eqListDiscipline: "Disiplin / Tipe:",
+  eqListTelemetryStream: "Stream Telemetri:",
+  eqListCurrentReading: "Pembacaan Saat Ini:",
+  eqListWeeklyRecords: "26 Rekaman Mingguan",
+  eqListDataNA: "DATA TIDAK TERSEDIA",
+  eqListActiveStream: "Stream Aktif Case 2",
+  eqListIncidentLog: "Registri Log Insiden",
+  eqListInvestigateBtn: "INVESTIGASI",
+  eqListNoSensors: "Tidak Ada Sensor Aktif",
+
   // Equipment Detail
   equipmentDetailTitle: "Profil Kesehatan & Keandalan Peralatan",
   tabOverview: "01 Ringkasan & Parameter",
@@ -87,6 +116,45 @@ export const id = {
   tabRecommendations: "08 Rencana Tindakan",
   tabReview: "09 Tinjauan Engineer",
   tabFollowUp: "10 Tindak Lanjut ('Apakah Berhasil?')",
+
+  // Equipment Detail Page Tabs
+  eqDetailTabOverview: "Ikhtisar",
+  eqDetailTabTrend: "Tren",
+  eqDetailTabFFT: "Frekuensi / FFT",
+  eqDetailTabStats: "Statistik",
+  eqDetailTabEvents: "Peristiwa",
+  eqDetailSignalLabel: "SINYAL:",
+  eqDetailSyncBtn: "SINKRONISASI DATA",
+  eqDetailConditionLabel: "KONDISI:",
+  eqDetailConditionAttention: "PERHATIAN",
+  eqDetailConditionNormal: "NORMAL",
+  eqDetailReturnDash: "Kembali ke Dasbor",
+  eqDetailOverallVib: "Getaran Keseluruhan",
+  eqDetailHarmonic2X: "Harmonik 2X",
+  eqDetailCouplingOffset: "Offset Kopling",
+  eqDetailBearingTemp: "Suhu Bantalan DE",
+  eqDetailFFTTitle: "Harmonik Spektral Rotasional (Dekomposisi FFT)",
+  eqDetailFFTDesc: "Perbandingan tanda getaran fisik: 1X (Ketidakseimbangan) vs 2X (Misalignment) vs Amplop Frekuensi Tinggi Bantalan.",
+  eqDetailFFT1X: "KOMPONEN 1X (KETIDAKSEIMBANGAN)",
+  eqDetailFFT2X: "KOMPONEN 2X (MISALIGNMENT)",
+  eqDetailFFTBearing: "AMPLOP BANTALAN FREKUENSI TINGGI",
+  eqDetailFFT2XTrip: "MELEBIHI BATAS TRIP (≥ 5,0 mm/s)",
+  eqDetailFFT1XNormal: "NORMAL (Di bawah batas ISO 10816)",
+  eqDetailFFTBearingNormal: "NORMAL (Tidak ada cacat raceway dalam/luar)",
+  eqDetailStatsTitle: "Metrik Statistik Telemetri",
+  eqDetailStatsSubtitle: "Dihitung ketat dari data proyek",
+  eqDetailStatsRecords: "Rekaman Berkala",
+  eqDetailStatsSampleCount: "Jumlah Sampel",
+  eqDetailStatsMin: "Pembacaan Minimum",
+  eqDetailStatsMax: "Pembacaan Maksimum",
+  eqDetailStatsMean: "Rata-rata Aritmetik",
+  eqDetailEventsWeek: "Minggu",
+  eqDetailEventsDate: "Tanggal",
+  eqDetailEventsVib: "Getaran (mm/s)",
+  eqDetailEventsHarmonic: "Harmonik 2X (mm/s)",
+  eqDetailEventsOffset: "Offset Kopling (mm)",
+  eqDetailEventsBearingTemp: "Suhu Bantalan (°C)",
+  eqDetailEventsCondition: "Status Kondisi",
 
   // Telemetry Cards
   paramVibration: "Vibration Velocity RMS",
@@ -202,6 +270,19 @@ export const id = {
   recoveredText: "KONDISI PULIH KEMBALI MENUJU BASELINE NORMAL",
   verifiedByLabel: "Diverifikasi Oleh Lead Engineer",
 
+  // Follow-Up Page KPIs
+  followUpKpiVerified: "Perintah Kerja Terverifikasi",
+  followUpKpiVerifiedUnit: "Tindakan",
+  followUpKpiVerifiedSub: "Semua pemeriksaan pasca-pemeliharaan",
+  followUpKpiVibReduction: "Rata-rata Penurunan Getaran",
+  followUpKpiVibSub: "Sebelum vs sesudah turnaround",
+  followUpKpiVibTrend: "Kondisi Pulih",
+  followUpKpiOffsetRecovery: "Pemulihan Offset Kopling",
+  followUpKpiOffsetSub: "Verifikasi alignment presisi",
+  followUpKpiOffsetTrend: "Dalam toleransi (<0,05)",
+  followUpSectionTitle: "Rekaman Verifikasi Pasca-Pemeliharaan",
+  followUpSectionSubtitle: "Perbandingan parameter sebelum vs sesudah yang mengkonfirmasi pemulihan kondisi",
+
   // Ingestion Hub
   ingestionTitle: "Pusat Ingesti Data & Pemrosesan Telemetri",
   ingestionSubtitle: "Unggah, validasi, dan normalisasi buku kerja Excel pabrik ke dalam tabel database relasional",
@@ -264,4 +345,22 @@ export const id = {
   accessDenied: "Akses Dibatasi",
   accessDeniedDesc: "Peran Anda saat ini tidak memiliki otorisasi untuk melakukan tindakan ini.",
   unauthorizedWarning: "Persetujuan Lead Engineer diperlukan untuk menyetujui atau menolak perintah kerja turnaround.",
+
+  // Dashboard Page
+  dashboardBadge: "KECERDASAN MANUFAKTUR",
+  dashboardTitle: "Konsol Investigasi Kesehatan & Keandalan Peralatan",
+  dashboardSubtitle: "Konteks Pabrik: Polymer Plant (OPP) & Armada Sintesis Gas Unit 05 • CALIBER 2026 Case 2",
+  dashboardSyncBtn: "SINKRONISASI TELEMETRI",
+  dashboardKpiMonitored: "Peralatan Dipantau",
+  dashboardKpiMonitoredSub: "Aset Berputar Kritis Case 2",
+  dashboardKpiNormal: "Normal",
+  dashboardKpiNormalSub: "Beroperasi dalam batas baseline",
+  dashboardKpiAttention: "Perlu Perhatian",
+  dashboardKpiAttentionSub: "Pelanggaran ambang batas terdeteksi",
+  dashboardKpiActive: "Investigasi Aktif",
+  dashboardKpiActiveSub: "Analisis Akar Masalah sedang berlangsung",
+  dashboardFleetHeader: "Ikhtisar Armada Peralatan Dipantau",
+  dashboardFleetSubtitle: "Pilih kartu aset di bawah untuk memeriksa data telemetri deret waktu dan penilaian kondisinya",
+  dashboardFleetUnits: "Unit Dipantau",
+  dashboardInvBadge: "VISUAL INVESTIGASI UTAMA",
 };

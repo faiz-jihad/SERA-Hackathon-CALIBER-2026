@@ -105,7 +105,10 @@ export interface RCAResult {
   primary_root_cause: string
   confidence_level: string
   explanation: string
-  evidence: string[]
+  evidence: Array<string | { code?: string; item?: string; result?: string; evidence?: string }>
+  four_p_verification?: Array<{ code: string; item: string; result: 'G' | 'NG'; evidence: string }>
+  four_m_one_e?: Array<{ code: string; category: string; result: 'G' | 'NG'; evidence: string }>
+  ar_number?: string
   all_candidates: RCACandidate[]
   historical_match_count: number
 }
