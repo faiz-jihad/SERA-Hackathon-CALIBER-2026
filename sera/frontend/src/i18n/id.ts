@@ -301,7 +301,14 @@ export const id = {
 
   // Dialogs, Modals, Search
   searchModalTitle: "Pencarian Global Keandalan Pabrik",
-  searchModalDesc: "Temukan tag peralatan, riwayat insiden, dan pola kegagalan di seluruh Unit 05 dengan cepat",
+  searchModalDesc: "Temukan tag peralatan, riwayat insiden, dan pola kegagalan di seluruh fasilitas pabrik Orion dengan cepat",
+  tabBatchIngestion: "Ingesti Batch File Excel",
+  tabLiveStream: "Gateway Streaming Telemetri Langsung (SCADA / OPC-UA)",
+  datasetOriginTitle: "Dataset Resmi Kasus 2 CALIBER 2026",
+  datasetOriginDesc: "Data bersumber langsung dari fasilitas Orion Polypropylene (OPP), Aromatic Plant (ARP), dan Unit ZCU. Tidak ada data buatan.",
+  liveStreamDesc: "Simulasikan atau kirim paket telemetri langsung dari PLC/SCADA ke endpoint POST /api/ingestion/telemetry dengan evaluasi ambang ISO 10816-3 secara seketika.",
+  sendTelemetryBtn: "Kirim Paket Telemetri",
+  telemetrySentSuccess: "Telemetri berhasil disimpan & status aset diperbarui",
   typeToSearch: "Ketik tag aset (cth: BL-5702, PU-2101B) atau kata kunci...",
   categoryEquipment: "Aset Peralatan",
   categoryIncidents: "Insiden Historis",
@@ -349,7 +356,7 @@ export const id = {
   // Dashboard Page
   dashboardBadge: "KECERDASAN MANUFAKTUR",
   dashboardTitle: "Konsol Investigasi Kesehatan & Keandalan Peralatan",
-  dashboardSubtitle: "Konteks Pabrik: Polymer Plant (OPP) & Armada Sintesis Gas Unit 05 • CALIBER 2026 Case 2",
+  dashboardSubtitle: "Konteks Pabrik: Orion Polypropylene Plant (OPP), Aromatic Plant (ARP) & SMX • CALIBER 2026 Case 2",
   dashboardSyncBtn: "SINKRONISASI TELEMETRI",
   dashboardKpiMonitored: "Peralatan Dipantau",
   dashboardKpiMonitoredSub: "Aset Berputar Kritis Case 2",

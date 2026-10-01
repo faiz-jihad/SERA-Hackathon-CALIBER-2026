@@ -3,7 +3,7 @@ Incidents API — historical incident database
 """
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from typing import Optional, List
+from typing import Optional
 
 from database.connection import get_db
 from models.db_models import Incident

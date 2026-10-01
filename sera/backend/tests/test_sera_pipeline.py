@@ -102,7 +102,7 @@ def test_data_ingestion_records():
 
         # Check fields
         first = bl_conditions[0]
-        assert first.equipment_id == "BL-5702"
+        assert str(first.equipment_id) == "BL-5702"
         assert first.vibration is not None
     finally:
         db.close()
@@ -509,7 +509,298 @@ def test_all_13_mandatory_api_endpoints():
     assert r13.status_code == 200
 
 
+# ─── SECTION 22 COMPLIANCE TESTS (ALL 16 MINIMUM REQUIREMENTS) ───
+
+def test_22_1_health_and_ready():
+    """Requirement 1: Health check & readiness probes."""
+    r_health = client.get("/health")
+    assert r_health.status_code == 200
+    h_data = r_health.json()
+    assert h_data["status"] == "healthy"
+    assert h_data["database"] == "connected"
+
+    r_ready = client.get("/ready")
+    assert r_ready.status_code == 200
+    assert r_ready.json()["status"] == "ready"
+
+
+def test_22_2_database_connection():
+    """Requirement 2: Database connection and query execution."""
+    db = SessionLocal()
+    try:
+        from sqlalchemy import text
+        res = db.execute(text("SELECT count(*) FROM equipment")).scalar()
+        assert res is not None and res >= 5, "Database must contain at least the 5 primary Case 2 assets"
+    finally:
+        db.close()
+
+
+def test_22_3_ingestion():
+    """Requirement 3: Official Case 2 data ingestion & statistics."""
+    r = client.post("/api/ingestion/ingest-raw?equipment_id=BL-5702")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "success"
+    assert data["records_inserted"] > 0
+    assert "errors" in data
+    assert isinstance(data["errors"], list)
+
+
+def test_22_4_invalid_ingestion():
+    """Requirement 4: Invalid telemetry payloads rejected with HTTP 4xx."""
+    # Unknown equipment -> 404
+    r_bad_eq = client.post("/api/ingestion/telemetry", json={"equipment_id": "UNKNOWN_PUMP_999", "vibration": 3.5})
+    assert r_bad_eq.status_code in (400, 404)
+
+    # Empty equipment -> 400
+    r_empty_eq = client.post("/api/ingestion/telemetry", json={"equipment_id": "", "vibration": 3.5})
+    assert r_empty_eq.status_code in (400, 422)
+
+    # Malformed timestamp -> 400
+    r_bad_ts = client.post("/api/ingestion/telemetry", json={"equipment_id": "BL-5702", "timestamp": "not-a-date", "vibration": 3.5})
+    assert r_bad_ts.status_code in (400, 422)
+
+
+def test_22_5_detection():
+    """Requirement 5: Detection engine from database data with full traceability."""
+    r = client.post("/api/analysis/detect?equipment_id=BL-5702")
+    assert r.status_code == 200
+    data = r.json()
+    assert "detections" in data
+    assert len(data["detections"]) > 0
+
+    det = data["detections"][0]
+    assert "equipment" in det
+    assert "parameter" in det
+    assert "observed_value" in det
+    assert "threshold" in det
+    assert "threshold_source" in det or "rule_source" in det
+    assert "status" in det
+    assert "severity" in det
+    assert "rule_id" in det
+    assert "explanation" in det
+
+
+def test_22_6_rule_trace():
+    """Requirement 6: Rule traceability answers 'Why did SERA classify this condition as ALARM/TRIP?'."""
+    r = client.get("/api/equipment/BL-5702/rule-trace")
+    assert r.status_code == 200
+    data = r.json()
+    assert "rules_triggered" in data
+    assert "reasons" in data
+    for rule in data["rules_triggered"]:
+        assert "rule_id" in rule
+        assert "parameter" in rule
+        assert "threshold" in rule
+        assert "unit" in rule
+        assert "source" in rule
+        assert "condition" in rule
+        assert "resulting_status" in rule
+
+
+def test_22_7_what_changed():
+    """Requirement 7: What Changed calculates dynamic differences without hardcoded values."""
+    r = client.get("/api/equipment/BL-5702/what-changed")
+    assert r.status_code == 200
+    data = r.json()
+    assert "comparison" in data
+    assert len(data["comparison"]) >= 4
+    for c in data["comparison"]:
+        assert "parameter" in c
+        assert "baseline_value" in c
+        assert "current_value" in c
+        assert "absolute_change" in c
+        assert "percentage_change" in c
+        assert "trend" in c
+        assert "status" in c
+
+
+def test_22_8_multi_window_trend():
+    """Requirement 8: Multi-window linear regression for 4-week, 8-week, and 12-week windows."""
+    r = client.get("/api/equipment/BL-5702/trends")
+    assert r.status_code == 200
+    data = r.json()
+    assert "4_weeks" in data
+    assert "8_weeks" in data
+    assert "12_weeks" in data
+
+    vib_4w = data["4_weeks"].get("vibration")
+    assert vib_4w is not None
+    assert "slope" in vib_4w
+    assert "intercept" in vib_4w
+    assert "start_value" in vib_4w
+    assert "end_value" in vib_4w
+    assert "change_percentage" in vib_4w
+    assert "trend_direction" in vib_4w
+    assert "observations_count" in vib_4w
+    assert "r_squared" in vib_4w
+
+
+def test_22_9_correlation():
+    """Requirement 9 & 10: Multi-parameter statistical correlation and harmonic analysis safety."""
+    # Correlation
+    r_corr = client.get("/api/equipment/BL-5702/correlations")
+    assert r_corr.status_code == 200
+    c_data = r_corr.json()
+    assert "correlation_matrix" in c_data
+    assert "pairwise_correlations" in c_data
+    if c_data["pairwise_correlations"]:
+        pw = c_data["pairwise_correlations"][0]
+        assert "parameter_a" in pw
+        assert "parameter_b" in pw
+        assert "pearson_r" in pw
+        assert "observation_count" in pw
+
+    # Harmonic analysis safety (Requirement 9: 1X missing -> available: false, no fabrication)
+    r_harm = client.get("/api/equipment/BL-5702/harmonic-analysis")
+    assert r_harm.status_code == 200
+    h_data = r_harm.json()
+    assert "available" in h_data
+    if not h_data["available"]:
+        assert "reason" in h_data
+
+
+def test_22_10_historical_similarity():
+    """Requirement 11: Real TF-IDF vectorization and cosine similarity across 380 incidents."""
+    r = client.get("/api/incidents/similar?equipment_id=BL-5702")
+    assert r.status_code == 200
+    data = r.json()
+    assert isinstance(data, list)
+    assert len(data) > 0
+    top = data[0]
+    assert "incident_id" in top
+    assert "similarity_score" in top
+    assert "historical_event" in top
+    assert "historical_action" in top
+    assert "source_reference" in top
+
+
+def test_22_11_rca():
+    """Requirement 12: RCA returns 5-Why and distinguishes Fact vs Interpretation vs Cause."""
+    r = client.post("/api/analysis/rca?equipment_id=BL-5702")
+    assert r.status_code == 200
+    data = r.json()
+    assert "five_why" in data
+    assert "problem" in data["five_why"]
+    assert "why_1" in data["five_why"]
+    assert "why_2" in data["five_why"]
+    assert "why_3" in data["five_why"]
+    assert "why_4" in data["five_why"]
+    assert "why_5" in data["five_why"]
+    assert "observed_facts" in data
+    assert "engineering_interpretations" in data
+    assert "possible_causes" in data
+
+
+def test_22_12_recommendation():
+    """Requirement 14: Recommendation response contains observed condition, evidence, risk, and action."""
+    r = client.post("/api/recommendation?equipment_id=BL-5702")
+    assert r.status_code == 200
+    data = r.json()
+    assert "observed_condition" in data
+    assert "evidence" in data
+    assert "priority" in data
+    assert "recommended_action" in data
+    assert "inspection_rationale" in data
+    assert "supporting_historical_evidence" in data
+    assert "engineer_review_requirement" in data
+
+
+def test_22_13_engineer_review():
+    """Requirement 15: Engineer review with ACCEPT, MODIFY, REJECT."""
+    # Create recommendation
+    rec = client.post("/api/recommendation?equipment_id=BL-5702").json()
+    rec_id = rec["id"]
+
+    # Test ACCEPT
+    r_accept = client.post(
+        f"/api/recommendation/{rec_id}/review",
+        json={"review_status": "ACCEPTED", "reviewed_by": "Chief Engineer", "engineer_notes": "Laser alignment approved"}
+    )
+    assert r_accept.status_code == 200
+    assert r_accept.json()["review_status"] == "ACCEPTED"
+
+    # Test MODIFY
+    r_modify = client.post(
+        f"/api/recommendation/{rec_id}/review",
+        json={"review_status": "MODIFIED", "reviewed_by": "Chief Engineer", "final_action": "Execute precision realignment within 12 hours"}
+    )
+    assert r_modify.status_code == 200
+    assert r_modify.json()["review_status"] == "MODIFIED"
+
+    # Test REJECT
+    r_reject = client.post(
+        f"/api/recommendation/{rec_id}/review",
+        json={"review_status": "REJECTED", "reviewed_by": "Chief Engineer", "engineer_notes": "Duplicate recommendation"}
+    )
+    assert r_reject.status_code == 200
+    assert r_reject.json()["review_status"] == "REJECTED"
+
+
+def test_22_14_work_order_recommendation():
+    """Requirement 16: Work Order Recommendation (Draft) structured fields, no fake SAP claims."""
+    rec = client.post("/api/recommendation?equipment_id=BL-5702").json()
+    rec_id = rec["id"]
+
+    r = client.get(f"/api/recommendation/{rec_id}/work-order")
+    assert r.status_code == 200
+    data = r.json()
+    assert "work_order_reference" in data
+    assert "equipment" in data
+    assert "priority" in data
+    assert "recommended_action" in data
+    assert "reason" in data
+    assert "required_inspection" in data
+    assert "requested_timing" in data
+    assert "engineer_approval_status" in data
+    assert "sap_integration_note" in data
+
+
+def test_22_15_post_maintenance_verification():
+    """Requirement 17: Dynamic post-maintenance verification comparing before vs after from database."""
+    r = client.get("/api/follow-up/BL-5702/verify")
+    assert r.status_code == 200
+    data = r.json()
+    assert "before_values" in data
+    assert "after_values" in data
+    assert "absolute_change" in data
+    assert "percentage_change" in data
+    assert "status_after_maintenance" in data
+    assert "verification_result" in data
+    assert data["verification_result"] == "VERIFIED_RECOVERED"
+
+
+def test_22_16_multi_equipment_support():
+    """Requirement 22 & Multi-Equipment: Process other Case 2 assets without BL-5702 hardcoding."""
+    for eq_id in ["PU-2101B", "KO-3201", "PM-4405B", "HE-3301"]:
+        # Rule trace
+        r_trace = client.get(f"/api/equipment/{eq_id}/rule-trace")
+        assert r_trace.status_code == 200
+
+        # Trends
+        r_trends = client.get(f"/api/equipment/{eq_id}/trends")
+        assert r_trends.status_code == 200
+        assert "4_weeks" in r_trends.json()
+
+        # What changed
+        r_wc = client.get(f"/api/equipment/{eq_id}/what-changed")
+        assert r_wc.status_code == 200
+
+        # Harmonic analysis (1X safety check)
+        r_harm = client.get(f"/api/equipment/{eq_id}/harmonic-analysis")
+        assert r_harm.status_code == 200
+
+        # Correlations
+        r_corr = client.get(f"/api/equipment/{eq_id}/correlations")
+        assert r_corr.status_code == 200
+
+        # Detection
+        r_det = client.post(f"/api/analysis/detect?equipment_id={eq_id}")
+        assert r_det.status_code == 200
+
+
 # ─── 14. AI FAILURE FALLBACK TEST ──────────────────────────────────
+
 def test_ai_failure_fallback():
     """Verify that if LLM provider fails or key is missing, deterministic fallback succeeds."""
     # Temporarily remove any API keys to simulate LLM failure
@@ -639,7 +930,7 @@ def test_bl5702_integration_end_to_end():
         db.refresh(rec_model)
 
         assert rec_model.id is not None
-        assert rec_model.review_status == "ACCEPTED"
+        assert str(rec_model.review_status) == "ACCEPTED"
 
         # Step 9: Follow-up Verification
         fu = FollowUp(
@@ -657,10 +948,64 @@ def test_bl5702_integration_end_to_end():
         db.refresh(fu)
 
         assert fu.id is not None
-        assert fu.verification_result == "VERIFIED_RECOVERED"
+        assert str(fu.verification_result) == "VERIFIED_RECOVERED"
 
     finally:
         db.close()
+
+
+def test_cross_module_temporal_consistency():
+    """
+    Regression Test (Section 9): Cross-Module Data & Temporal Consistency for BL-5702.
+    Guarantees that:
+    1. Condition Context identifies verified trip observation (Week 21, 11.22 mm/s, TRIP).
+    2. What Changed references the exact same critical observation ID and 11.22 mm/s TRIP status.
+    3. Evidence layer (E-001) references the exact same record ID and 11.22 mm/s.
+    4. Detection identifies the verified 11.22 mm/s TRIP event.
+    5. Post-maintenance verification uses the verified before value (11.22 mm/s).
+    6. All stages use consistent source observations and will fail if values differ.
+    """
+    # 1. Condition Context
+    r_ctx = client.get("/api/equipment/BL-5702/condition-context")
+    assert r_ctx.status_code == 200
+    ctx = r_ctx.json()
+    assert ctx["critical"]["vibration"] == 11.22
+    assert ctx["critical"]["week_number"] == 21
+    assert ctx["critical"]["status"] == "TRIP"
+    crit_id = ctx["critical"]["id"]
+    assert crit_id is not None
+
+    # 2. What Changed
+    r_wc = client.get("/api/equipment/BL-5702/what-changed")
+    assert r_wc.status_code == 200
+    wc = r_wc.json()
+    assert wc["critical_source_record_id"] == crit_id, "What Changed critical source record ID mismatch"
+    wc_vib = next(c for c in wc["comparison"] if c["parameter_key"] == "vibration")
+    assert wc_vib["critical_value"] == 11.22, f"Expected 11.22, got {wc_vib['critical_value']}"
+    assert wc_vib["status"] == "TRIP", f"Expected TRIP, got {wc_vib['status']}"
+
+    # 3. Evidence Layer
+    r_ev = client.get("/api/equipment/BL-5702/evidence")
+    assert r_ev.status_code == 200
+    ev = r_ev.json()
+    ev_vib = next(e for e in ev if e["parameter_key"] == "vibration")
+    assert ev_vib["observed_value"] == 11.22, f"Expected 11.22, got {ev_vib['observed_value']}"
+    assert ev_vib["severity"] == "TRIP", f"Expected TRIP, got {ev_vib['severity']}"
+    assert ev_vib["record_id"] == crit_id, "Evidence record ID mismatch"
+
+    # 4. Post-maintenance verification
+    r_ver = client.get("/api/follow-up/BL-5702/verify")
+    assert r_ver.status_code == 200
+    ver = r_ver.json()
+    b_vals = ver.get("before_values") or {}
+    assert float(b_vals.get("vibration", 0.0)) == 11.22, f"Expected before vibration 11.22, got {b_vals.get('vibration')}"
+
+    # 5. Strict Regression Cross-Equality Assertion
+    # Detection/What-Changed critical value == Evidence critical value == Verification before value
+    assert wc_vib["critical_value"] == ev_vib["observed_value"] == float(b_vals["vibration"]) == 11.22, (
+        f"Critical temporal value inconsistency detected across modules: "
+        f"What-Changed={wc_vib['critical_value']}, Evidence={ev_vib['observed_value']}, Verification={b_vals['vibration']}"
+    )
 
 
 if __name__ == "__main__":
@@ -688,6 +1033,23 @@ if __name__ == "__main__":
         ("13. All 13 Mandatory API Endpoints", test_all_13_mandatory_api_endpoints),
         ("14. AI Failure Fallback & Resiliency", test_ai_failure_fallback),
         ("15. BL-5702 Full End-to-End Integration Flow", test_bl5702_integration_end_to_end),
+        ("16a. Health & Ready Probes", test_22_1_health_and_ready),
+        ("16b. Database Connection & Master Assets", test_22_2_database_connection),
+        ("16c. Official Case 2 Ingestion", test_22_3_ingestion),
+        ("16d. Invalid Ingestion 4xx Rejection", test_22_4_invalid_ingestion),
+        ("16e. Traceable Problem Detection", test_22_5_detection),
+        ("16f. Explainable Rule Trace", test_22_6_rule_trace),
+        ("16g. Dynamic What Changed", test_22_7_what_changed),
+        ("16h. 4W/8W/12W Multi-Window Regression Trends", test_22_8_multi_window_trend),
+        ("16i. Pearson/Spearman Correlations & Harmonic 1X Safety", test_22_9_correlation),
+        ("16j. TF-IDF & Cosine Historical Matching", test_22_10_historical_similarity),
+        ("16k. RCA 5-Why & Fact vs Interpretation Distinction", test_22_11_rca),
+        ("16l. Grounded AI & Deterministic Recommendations", test_22_12_recommendation),
+        ("16m. Engineer Review Workflow (Accept/Modify/Reject)", test_22_13_engineer_review),
+        ("16n. Work Order Recommendation Structure (No fake SAP)", test_22_14_work_order_recommendation),
+        ("16o. Dynamic Post-Maintenance Verification", test_22_15_post_maintenance_verification),
+        ("16p. Multi-Equipment Support (PU-2101B, KO-3201, PM-4405B, HE-3301)", test_22_16_multi_equipment_support),
+        ("16q. Cross-Module Temporal Consistency (Regression)", test_cross_module_temporal_consistency),
     ]
 
     passed = 0

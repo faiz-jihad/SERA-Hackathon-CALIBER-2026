@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import {
   Menu,
   Search,
@@ -12,11 +12,14 @@ import {
   BarChart3,
   Database,
   Check,
+  Volume2,
+  VolumeX,
 } from 'lucide-react'
 import { useLanguage } from '../context/LanguageContext'
 import { useAuth, UserRole } from '../context/AuthContext'
 import LanguageSwitcher from './LanguageSwitcher'
 import GlobalSearchModal from './GlobalSearchModal'
+import soundEffects from '../utils/soundEffects'
 
 interface HeaderProps {
   sidebarOpen: boolean
@@ -29,7 +32,13 @@ export const Header: React.FC<HeaderProps> = ({ sidebarOpen, setSidebarOpen }) =
   const navigate = useNavigate()
   const [searchModalOpen, setSearchModalOpen] = useState(false)
   const [userDropdownOpen, setUserDropdownOpen] = useState(false)
+  const [soundOn, setSoundOn] = useState(soundEffects.isEnabled())
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  const toggleSound = () => {
+    const next = soundEffects.toggle()
+    setSoundOn(next)
+  }
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -113,10 +122,25 @@ export const Header: React.FC<HeaderProps> = ({ sidebarOpen, setSidebarOpen }) =
             {/* Language Switcher */}
             <LanguageSwitcher />
 
+            {/* Sound Effects Toggle */}
+            <button
+              type="button"
+              onClick={toggleSound}
+              title={soundOn ? 'Industrial Audio FX: Active (Click to mute)' : 'Industrial Audio FX: Muted (Click to enable)'}
+              className={`h-8 w-8 flex items-center justify-center border rounded-sm transition-colors ${
+                soundOn
+                  ? 'border-slate-300 bg-white text-primary hover:bg-slate-50'
+                  : 'border-slate-200 bg-slate-50 text-slate-400 hover:text-slate-600'
+              }`}
+              aria-label="Toggle Sound Effects"
+            >
+              {soundOn ? <Volume2 size={14} /> : <VolumeX size={14} />}
+            </button>
+
             {/* Plant indicator */}
             <div className="hidden xl:flex items-center gap-1.5 border border-slate-200 rounded-sm px-2.5 py-1 text-[10px] font-mono text-slate-600">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              OPP — Unit 05
+              Orion Polypropylene (OPP)
             </div>
 
             {/* Notification */}

@@ -4,10 +4,9 @@ Dashboard API — Plant overview, KPIs, summary metrics
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from datetime import datetime, timedelta, date
 
 from database.connection import get_db
-from models.db_models import Equipment, EquipmentCondition, DowntimeRecord, Incident, DetectedProblem
+from models.db_models import Equipment, DowntimeRecord, Incident, DetectedProblem
 
 router = APIRouter()
 

@@ -86,16 +86,16 @@ export const EquipmentTrainSchematic: React.FC<EquipmentTrainSchematicProps> = (
               </span>
             </div>
             <h4 className="text-xs font-bold text-slate-900">Electric Drive Motor</h4>
-            <span className="text-[10px] text-slate-500 font-mono">350 kW • 2980 RPM</span>
+            <span className="text-[10px] text-slate-500 font-mono">Induction Motor Drive</span>
           </div>
 
           <div className="mt-3 pt-2 border-t border-slate-200 text-[11px] font-mono text-slate-600">
-            <div>1X Harmonic: {(vibration * 0.25).toFixed(1)} mm/s</div>
-            <div>Stator Temp: {(45 + (bearingTemp * 0.2)).toFixed(1)} °C</div>
+            <div>1X Running Speed: {(vibration * 0.25).toFixed(1)} mm/s</div>
+            <div>Foot Condition: {isCouplingTrip ? '0.12 mm Soft-Foot' : 'Nominal (<0.05)'}</div>
           </div>
         </div>
 
-        {/* Component 2: Flexible Coupling */}
+        {/* Component 2: Flexible Elastomer Coupling */}
         <div
           className={`rounded-sm p-3.5 flex flex-col justify-between shadow-xs ${
             isCouplingTrip
@@ -127,10 +127,10 @@ export const EquipmentTrainSchematic: React.FC<EquipmentTrainSchematicProps> = (
               </span>
             </div>
             <h4 className={`text-xs font-bold ${isCouplingTrip ? 'text-red-900' : 'text-slate-900'}`}>
-              Flexible Disc Coupling
+              Flexible Elastomer Coupling
             </h4>
             <span className={`text-[10px] font-mono ${isCouplingTrip ? 'text-red-700 font-semibold' : 'text-slate-500'}`}>
-              {isCouplingTrip ? 'Centerline Misalignment' : 'Direct Mechanical Drive'}
+              {isCouplingTrip ? 'Shaft Misalignment & Insert Wear' : 'Direct Mechanical Drive'}
             </span>
           </div>
 
@@ -226,8 +226,8 @@ export const EquipmentTrainSchematic: React.FC<EquipmentTrainSchematicProps> = (
                 {isVibTrip ? 'TRIP VIB' : isVibWarn ? 'WARN VIB' : 'NOMINAL'}
               </span>
             </div>
-            <h4 className="text-xs font-bold text-slate-900">{equipmentName || 'Recycle Gas Blower'}</h4>
-            <span className="text-[10px] text-slate-500 font-mono">Process Gas Loop</span>
+            <h4 className="text-xs font-bold text-slate-900">{equipmentName || 'Centrifugal Blower'}</h4>
+            <span className="text-[10px] text-slate-500 font-mono">PP Powder Transport</span>
           </div>
 
           <div

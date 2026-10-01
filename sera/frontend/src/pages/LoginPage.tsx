@@ -90,7 +90,7 @@ export const LoginPage: React.FC = () => {
       name: PRESET_USERS.PLANT_MANAGER.name,
       title: t('roleManager'),
       badge: 'Executive Oversight',
-      dept: 'Unit 05 Synthesis Operations',
+      dept: 'Polymer & Petrochemical Plant Operations',
       desc: t('roleManagerDesc'),
       color: 'text-amber-600',
       bgLight: 'bg-slate-50',

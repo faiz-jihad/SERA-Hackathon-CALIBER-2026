@@ -4,6 +4,7 @@ import { Search, X, Cpu, AlertTriangle, Activity, ArrowRight } from 'lucide-reac
 import { useLanguage } from '../context/LanguageContext'
 import { getEquipmentList, getIncidents } from '../api/client'
 import StatusBadge from './StatusBadge'
+import soundEffects from '../utils/soundEffects'
 
 export interface GlobalSearchModalProps {
   isOpen: boolean
@@ -24,6 +25,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, on
       setQuery('')
       return
     }
+    soundEffects.playNotification()
     const fetchSearchIndex = async () => {
       setLoading(true)
       try {
@@ -129,6 +131,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, on
                       <div
                         key={eq.equipment_id}
                         onClick={() => {
+                          soundEffects.playClick()
                           navigate(`/equipment/${eq.equipment_id}`)
                           onClose()
                         }}
@@ -167,6 +170,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, on
                       <div
                         key={inc.id}
                         onClick={() => {
+                          soundEffects.playClick()
                           navigate(`/incidents?highlight=${inc.id}`)
                           onClose()
                         }}

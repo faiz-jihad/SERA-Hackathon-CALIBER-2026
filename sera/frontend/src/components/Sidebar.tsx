@@ -10,6 +10,7 @@ import {
   UploadCloud,
 } from 'lucide-react'
 import { useLanguage } from '../context/LanguageContext'
+import soundEffects from '../utils/soundEffects'
 
 export interface SidebarProps {
   sidebarOpen: boolean
@@ -112,6 +113,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen })
                         to={item.to}
                         end={item.exact}
                         onClick={() => {
+                          soundEffects.playClick()
                           if (window.innerWidth < 1024) setSidebarOpen(false)
                         }}
                         className={({ isActive }) =>

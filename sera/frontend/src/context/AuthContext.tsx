@@ -58,7 +58,7 @@ export const PRESET_USERS: Record<UserRole, UserProfile> = {
     name: 'Drs. Hartono Wijaya, MM',
     role: 'PLANT_MANAGER',
     roleTitle: 'Plant Operations Manager',
-    department: 'Unit 05 Synthesis Operations Division',
+    department: 'Polymer & Petrochemical Operations Division (OPP / ARP / SMX)',
     shift: 'General Daytime Operations',
     avatarInitials: 'HW',
     permissions: [

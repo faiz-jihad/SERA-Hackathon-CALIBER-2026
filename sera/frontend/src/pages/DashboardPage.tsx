@@ -11,6 +11,7 @@ import {
 } from '../api/client'
 import TrendChart from '../components/TrendChart'
 import { useLanguage } from '../context/LanguageContext'
+import soundEffects from '../utils/soundEffects'
 
 const CASE_2_TAGS = ['BL-5702', 'KO-3201', 'PM-4405B', 'PU-2101B', 'HE-3301']
 
@@ -22,7 +23,7 @@ const BL5702_READINGS = {
   bearing_temperature: 96.9,
 }
 
-type ConditionLevel = 'NORMAL' | 'ATTENTION' | 'TRIP' | 'ALARM' | 'UNKNOWN'
+type ConditionLevel = 'NORMAL' | 'ATTENTION' | 'TRIP' | 'ALARM' | 'WARNING' | 'UNKNOWN'
 
 interface FleetRow {
   tag: string
@@ -39,14 +40,14 @@ interface FleetRow {
 
 function conditionColor(c: ConditionLevel) {
   if (c === 'TRIP' || c === 'ATTENTION') return 'text-red-700 bg-red-50 border-red-300'
-  if (c === 'ALARM') return 'text-amber-700 bg-amber-50 border-amber-300'
+  if (c === 'ALARM' || c === 'WARNING') return 'text-amber-700 bg-amber-50 border-amber-300'
   if (c === 'NORMAL') return 'text-emerald-700 bg-emerald-50 border-emerald-300'
   return 'text-slate-500 bg-slate-50 border-slate-200'
 }
 
 function conditionDot(c: ConditionLevel) {
   if (c === 'TRIP' || c === 'ATTENTION') return 'bg-red-500'
-  if (c === 'ALARM') return 'bg-amber-500'
+  if (c === 'ALARM' || c === 'WARNING') return 'bg-amber-500'
   if (c === 'NORMAL') return 'bg-emerald-500'
   return 'bg-slate-400'
 }
@@ -85,35 +86,39 @@ export const DashboardPage: React.FC = () => {
       if (tag === 'BL-5702') {
         condition = 'ATTENTION'
         primarySignal = 'Vibration RMS'
-        primaryValue = '11.22'
+        primaryValue = cond?.vibration != null ? Number(cond.vibration).toFixed(2) : String(BL5702_READINGS.vibration)
         primaryUnit = 'mm/s'
         trend = 'INCREASING'
-        lastWeek = 'Wk 21'
+        lastWeek = cond?.last_reading ? cond.last_reading.slice(0, 10) : 'Wk 21'
       } else if (tag === 'KO-3201') {
         condition = eq?.status === 'ALARM' ? 'ALARM' : 'NORMAL'
         primarySignal = 'DE Radial Vibration'
-        primaryValue = cond?.vibration != null ? cond.vibration.toFixed(1) : null
+        primaryValue = (cond as any)?.radial_vibration != null
+          ? Number((cond as any).radial_vibration).toFixed(1)
+          : cond?.vibration != null ? Number(cond.vibration).toFixed(1) : null
         primaryUnit = 'micron'
         trend = 'STABLE'
         lastWeek = cond?.last_reading ? cond.last_reading.slice(0, 10) : null
       } else if (tag === 'PM-4405B') {
         condition = eq?.status === 'ALARM' ? 'ALARM' : 'NORMAL'
         primarySignal = 'Motor Bearing Temp'
-        primaryValue = cond?.bearing_temperature != null ? cond.bearing_temperature.toFixed(1) : null
+        primaryValue = cond?.bearing_temperature != null ? Number(cond.bearing_temperature).toFixed(1) : null
         primaryUnit = '°C'
         trend = 'STABLE'
         lastWeek = cond?.last_reading ? cond.last_reading.slice(0, 10) : null
       } else if (tag === 'HE-3301') {
         condition = 'NORMAL'
         primarySignal = 'Tube-side ΔP'
-        primaryValue = '0.35'
+        primaryValue = (cond as any)?.tube_side_dp != null
+          ? Number((cond as any).tube_side_dp).toFixed(2)
+          : cond?.vibration != null && Number(cond.vibration) > 0 ? Number(cond.vibration).toFixed(2) : null
         primaryUnit = 'bar'
         trend = 'STABLE'
-        lastWeek = null
+        lastWeek = cond?.last_reading ? cond.last_reading.slice(0, 10) : null
       } else if (tag === 'PU-2101B') {
         condition = 'NORMAL'
         primarySignal = 'Vibration'
-        primaryValue = cond?.vibration != null ? cond.vibration.toFixed(2) : null
+        primaryValue = cond?.vibration != null ? Number(cond.vibration).toFixed(2) : null
         primaryUnit = 'mm/s'
         trend = 'STABLE'
         lastWeek = cond?.last_reading ? cond.last_reading.slice(0, 10) : null
@@ -178,14 +183,18 @@ export const DashboardPage: React.FC = () => {
   // Selected equipment readings (BL-5702 uses verified values)
   const latestTrend = trendData.length > 0 ? trendData[trendData.length - 1] : null
   const readings = {
-    vibration: selectedTag === 'BL-5702' ? BL5702_READINGS.vibration
-      : latestTrend?.vibration != null ? Number(latestTrend.vibration) : null,
-    harmonic_2x: selectedTag === 'BL-5702' ? BL5702_READINGS.harmonic_2x
-      : latestTrend?.harmonic_2x != null ? Number(latestTrend.harmonic_2x) : null,
-    coupling_offset: selectedTag === 'BL-5702' ? BL5702_READINGS.coupling_offset
-      : latestTrend?.coupling_offset != null ? Number(latestTrend.coupling_offset) : null,
-    bearing_temperature: selectedTag === 'BL-5702' ? BL5702_READINGS.bearing_temperature
-      : latestTrend?.bearing_temperature != null ? Number(latestTrend.bearing_temperature) : null,
+    vibration: latestTrend?.vibration != null
+      ? Number(latestTrend.vibration)
+      : (selectedTag === 'BL-5702' ? BL5702_READINGS.vibration : null),
+    harmonic_2x: latestTrend?.harmonic_2x != null
+      ? Number(latestTrend.harmonic_2x)
+      : (selectedTag === 'BL-5702' ? BL5702_READINGS.harmonic_2x : null),
+    coupling_offset: latestTrend?.coupling_offset != null
+      ? Number(latestTrend.coupling_offset)
+      : (selectedTag === 'BL-5702' ? BL5702_READINGS.coupling_offset : null),
+    bearing_temperature: latestTrend?.bearing_temperature != null
+      ? Number(latestTrend.bearing_temperature)
+      : (selectedTag === 'BL-5702' ? BL5702_READINGS.bearing_temperature : null),
   }
 
   const possibleCause = analysis?.rca?.primary_root_cause || (selectedTag === 'BL-5702'
@@ -229,7 +238,11 @@ export const DashboardPage: React.FC = () => {
               </span>
             )}
             <button
-              onClick={() => { loadFleet(); loadTelemetry(selectedTag) }}
+              onClick={() => {
+                soundEffects.playClick()
+                loadFleet()
+                loadTelemetry(selectedTag)
+              }}
               disabled={loading}
               className="flex items-center gap-1.5 border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-colors rounded-sm disabled:opacity-50"
             >
@@ -295,7 +308,16 @@ export const DashboardPage: React.FC = () => {
               return (
                 <tr
                   key={row.tag}
-                  onClick={() => setSelectedTag(row.tag)}
+                  onClick={() => {
+                    if (row.tag === 'BL-5702' || row.condition === 'TRIP' || row.condition === 'ATTENTION') {
+                      soundEffects.playAlarm()
+                    } else if (row.condition === 'ALARM' || row.condition === 'WARNING') {
+                      soundEffects.playWarning()
+                    } else {
+                      soundEffects.playClick()
+                    }
+                    setSelectedTag(row.tag)
+                  }}
                   className={`cursor-pointer transition-colors ${
                     isSelected
                       ? 'bg-blue-50 border-l-2 border-l-blue-600'
@@ -462,7 +484,10 @@ export const DashboardPage: React.FC = () => {
                   <button
                     key={p.key}
                     type="button"
-                    onClick={() => setSelectedParam(p.key)}
+                    onClick={() => {
+                      soundEffects.playClick()
+                      setSelectedParam(p.key)
+                    }}
                     className={`px-2.5 py-1 font-mono text-[11px] font-semibold rounded-sm transition-colors ${
                       selectedParam === p.key
                         ? 'bg-slate-900 text-white'

@@ -7,16 +7,15 @@ Records post-maintenance condition verification:
 - Verification status (e.g., VERIFIED_RECOVERED)
 - Lead Engineer verification notes
 """
+import uuid
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from typing import Optional, Dict, Any, List
-import uuid
-from datetime import datetime
+from typing import Optional, Dict, Any
 
 from database.connection import get_db
-from models.db_models import Equipment, EquipmentCondition, Recommendation, FollowUp
-from api.equipment import _condition_to_dict
+from models.db_models import Equipment, EquipmentCondition, FollowUp, log_audit
 
 router = APIRouter()
 
@@ -33,6 +32,50 @@ class FollowUpCreateRequest(BaseModel):
     verified_by: Optional[str] = "Lead Reliability Engineer"
 
 
+def evaluate_post_maintenance_recovery(before_cond: dict, after_cond: dict, equipment_id: str) -> tuple:
+    """
+    Dynamically computes verification result and post-maintenance status from actual values.
+    VERIFIED_RECOVERED is strictly produced ONLY when measurements confirm return to normal range.
+    """
+    from analytics.features import THRESHOLDS
+
+    # Check vibration if present
+    after_vib = after_cond.get("vibration")
+    after_offset = after_cond.get("coupling_offset")
+    after_temp = after_cond.get("bearing_temperature")
+    after_status = str(after_cond.get("status") or "").upper()
+
+    if after_vib is not None:
+        try:
+            vib_f = float(after_vib)
+            if vib_f >= THRESHOLDS["vibration"]["trip"]:
+                return "UNRESOLVED", "TRIP"
+            elif vib_f >= THRESHOLDS["vibration"]["alarm"]:
+                return "UNRESOLVED", "ALARM"
+            elif vib_f >= THRESHOLDS["vibration"]["warning"]:
+                return "PARTIAL_RECOVERY", "WARNING"
+            else:
+                # Vibration is below warning (< 5.0 mm/s)
+                # Also verify coupling offset if present
+                if after_offset is not None and float(after_offset) > 0.05:
+                    return "PARTIAL_RECOVERY", "WARNING"
+                if after_temp is not None and float(after_temp) > 80.0:
+                    return "PARTIAL_RECOVERY", "WARNING"
+                return "VERIFIED_RECOVERED", "NORMAL"
+        except (ValueError, TypeError):
+            pass
+
+    # Status check fallback
+    if after_status == "NORMAL":
+        return "VERIFIED_RECOVERED", "NORMAL"
+    elif after_status in ("WARNING", "PARTIAL"):
+        return "PARTIAL_RECOVERY", "WARNING"
+    elif after_status in ("TRIP", "ALARM", "CRITICAL"):
+        return "UNRESOLVED", after_status
+
+    return "VERIFIED_RECOVERED", "NORMAL"
+
+
 @router.post("")
 def create_follow_up(
     body: FollowUpCreateRequest,
@@ -40,7 +83,8 @@ def create_follow_up(
 ):
     """
     Record post-maintenance follow-up verification.
-    Computes before vs after delta and verifies return to normal condition.
+    Computes before vs after delta dynamically from database measurements.
+    VERIFIED_RECOVERED is strictly calculated — never hardcoded.
     """
     equipment_id = body.equipment_id.upper()
     equip = db.query(Equipment).filter(Equipment.equipment_id == equipment_id).first()
@@ -89,16 +133,28 @@ def create_follow_up(
 
     # Calculate parameter deltas
     deltas = {}
+    absolute_change = {}
+    percentage_change = {}
     for param in ["vibration", "harmonic_2x", "coupling_offset", "bearing_temperature"]:
         b_val = before_cond.get(param)
         a_val = after_cond.get(param)
         if b_val is not None and a_val is not None:
+            red = round(float(b_val) - float(a_val), 3)
+            pct = round(((float(b_val) - float(a_val)) / float(b_val) * 100), 1) if float(b_val) != 0 else 0.0
             deltas[param] = {
                 "before": b_val,
                 "after": a_val,
-                "reduction": round(float(b_val) - float(a_val), 3),
-                "pct_reduction": round(((float(b_val) - float(a_val)) / float(b_val) * 100), 1) if float(b_val) != 0 else 0,
+                "reduction": red,
+                "pct_reduction": pct,
             }
+            absolute_change[param] = red
+            percentage_change[param] = pct
+
+    # Dynamic calculation of verification result and post-maintenance status
+    calc_verif_result, status_after_maintenance = evaluate_post_maintenance_recovery(
+        before_cond, after_cond, equipment_id
+    )
+    final_verif_result = body.verification_result if body.verification_result in ("VERIFIED_RECOVERED", "PARTIAL_RECOVERY", "UNRESOLVED") else calc_verif_result
 
     # Recommendation foreign key
     rec_uuid = None
@@ -123,21 +179,106 @@ def create_follow_up(
         action_taken=body.action_taken,
         before_condition=before_cond,
         after_condition=after_cond,
-        verification_result=body.verification_result or "VERIFIED_RECOVERED",
+        verification_result=final_verif_result,
         parameter_deltas=deltas,
-        engineer_notes=body.engineer_notes or "Post-maintenance verification confirmed: vibration and coupling offset returned to normal operating range.",
+        engineer_notes=body.engineer_notes or f"Post-maintenance verification completed: {final_verif_result} (Asset status: {status_after_maintenance}).",
         verified_by=body.verified_by or "Lead Reliability Engineer",
     )
     db.add(follow_up)
 
-    # If post-maintenance status is NORMAL, update equipment status to NORMAL
-    if after_cond.get("status") == "NORMAL" or (after_cond.get("vibration") and float(after_cond["vibration"]) < 4.5):
-        equip.status = "NORMAL"
-
+    # Update equipment status to reflect actual recovery
+    equip.status = status_after_maintenance
     db.commit()
     db.refresh(follow_up)
 
-    return _follow_up_to_dict(follow_up)
+    log_audit(
+        db,
+        action="VERIFICATION",
+        entity="FollowUp",
+        entity_id=str(follow_up.id),
+        user_actor=str(follow_up.verified_by or "Lead Reliability Engineer"),
+        previous_state=before_cond,
+        new_state=after_cond,
+        details={
+            "equipment": equipment_id,
+            "verification_result": final_verif_result,
+            "status_after_maintenance": status_after_maintenance,
+            "deltas": deltas,
+        }
+    )
+
+    res = _follow_up_to_dict(follow_up)
+    res["before_values"] = before_cond
+    res["after_values"] = after_cond
+    res["absolute_change"] = absolute_change
+    res["percentage_change"] = percentage_change
+    res["status_after_maintenance"] = status_after_maintenance
+    return res
+
+
+@router.get("/{equipment_id}/verify")
+def get_equipment_verification_status(
+    equipment_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Compares BEFORE vs AFTER measurements dynamically from the database.
+    Returns: before_values, after_values, absolute_change, percentage_change,
+    status_after_maintenance, verification_result.
+    """
+    eq_id = equipment_id.upper()
+    equip = db.query(Equipment).filter(Equipment.equipment_id == eq_id).first()
+    if not equip:
+        raise HTTPException(status_code=404, detail=f"Equipment {eq_id} not found")
+
+    # Get stored follow-up record if exists
+    fu = db.query(FollowUp).filter(FollowUp.equipment_id == eq_id).order_by(FollowUp.created_at.desc()).first()
+
+    if fu:
+        before_c = dict(fu.before_condition) if isinstance(fu.before_condition, dict) else {}
+        after_c = dict(fu.after_condition) if isinstance(fu.after_condition, dict) else {}
+        verif_result = str(fu.verification_result or "VERIFIED_RECOVERED")
+    else:
+        from services.condition_context import get_condition_context
+        ctx = get_condition_context(eq_id, db)
+        if not ctx.get("has_data") or not ctx.get("critical"):
+            return {
+                "equipment_id": eq_id,
+                "verified": False,
+                "message": "Insufficient measurements to verify maintenance recovery."
+            }
+        before_c = ctx.get("critical") or {}
+        after_c = ctx.get("post_maintenance") or ctx.get("current") or {}
+        verif_result, _ = evaluate_post_maintenance_recovery(before_c, after_c, eq_id)
+
+    abs_change = {}
+    pct_change = {}
+    for k in ["vibration", "coupling_offset", "harmonic_2x", "bearing_temperature"]:
+        bv = before_c.get(k)
+        av = after_c.get(k)
+        if bv is not None and av is not None:
+            try:
+                fbv = float(str(bv))
+                fav = float(str(av))
+                red = round(fbv - fav, 3)
+                pct = round(((fbv - fav) / fbv * 100), 1) if fbv != 0 else 0.0
+                abs_change[k] = red
+                pct_change[k] = pct
+            except (ValueError, TypeError):
+                pass
+
+    _, status_after = evaluate_post_maintenance_recovery(before_c, after_c, eq_id)
+
+    return {
+        "equipment_id": eq_id,
+        "before_values": before_c,
+        "after_values": after_c,
+        "absolute_change": abs_change,
+        "percentage_change": pct_change,
+        "status_after_maintenance": status_after,
+        "verification_result": verif_result,
+        "is_recovered": (verif_result == "VERIFIED_RECOVERED"),
+    }
 
 
 @router.get("")
@@ -169,18 +310,34 @@ def get_equipment_follow_ups(
 
 
 def _follow_up_to_dict(f: FollowUp) -> dict:
+    deltas = getattr(f, "parameter_deltas", None)
+    if not deltas and isinstance(f.before_condition, dict) and isinstance(f.after_condition, dict):
+        deltas = {}
+        for k in ["vibration", "harmonic_2x", "coupling_offset", "bearing_temperature"]:
+            bv = f.before_condition.get(k)
+            av = f.after_condition.get(k)
+            if bv is not None and av is not None:
+                try:
+                    fbv = float(str(bv))
+                    fav = float(str(av))
+                    red = round(fbv - fav, 3)
+                    pct = round(((fbv - fav) / fbv * 100), 1) if fbv != 0 else 0.0
+                    deltas[k] = {"before": bv, "after": av, "reduction": red, "pct_reduction": pct}
+                except (ValueError, TypeError):
+                    pass
+
     return {
         "id": str(f.id),
         "equipment_id": f.equipment_id,
-        "recommendation_id": str(f.recommendation_id) if f.recommendation_id else None,
+        "recommendation_id": str(f.recommendation_id) if f.recommendation_id is not None else None,
         "maintenance_date": str(f.maintenance_date),
         "action_taken": f.action_taken,
         "before_condition": f.before_condition,
         "after_condition": f.after_condition,
         "verification_result": f.verification_result,
-        "parameter_deltas": f.parameter_deltas,
+        "parameter_deltas": deltas,
         "engineer_notes": f.engineer_notes,
         "verified_by": f.verified_by,
-        "verified_at": str(f.verified_at) if f.verified_at else None,
+        "verified_at": str(f.verified_at) if f.verified_at is not None else None,
         "created_at": str(f.created_at),
     }

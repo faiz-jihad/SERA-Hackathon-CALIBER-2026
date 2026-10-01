@@ -109,84 +109,99 @@ export const EquipmentDetailPage: React.FC = () => {
     equipment?.status === 'ALARM' ||
     equipmentId === 'BL-5702'
 
-  // Latest / Peak Readings
+  // Latest / Peak Readings derived dynamically from backend analysis or condition summary
   const latestTrend = trendData.length > 0 ? trendData[trendData.length - 1] : null
-  const currentVib = equipmentId === 'BL-5702' ? 11.22 : Number(equipment?.condition_summary?.vibration ?? latestTrend?.vibration ?? 0)
-  const currentHarmonic = equipmentId === 'BL-5702' ? 5.10 : Number(equipment?.condition_summary?.harmonic_2x ?? latestTrend?.harmonic_2x ?? 0)
-  const currentOffset = equipmentId === 'BL-5702' ? 0.306 : Number(equipment?.condition_summary?.coupling_offset ?? latestTrend?.coupling_offset ?? 0)
-  const currentTemp = equipmentId === 'BL-5702' ? 96.9 : Number(equipment?.condition_summary?.bearing_temperature ?? latestTrend?.bearing_temperature ?? 0)
 
-  // Construct structured Evidence List from actual backend analysis or data
-  const evidenceList: EvidenceRecordItem[] = [
-    {
-      signal: 'Overall Vibration RMS',
-      parameterKey: 'vibration',
-      observedPattern: `${currentVib.toFixed(2)} mm/s (Rapid rise from 4.0 mm/s nominal)`,
-      detectionResult: currentVib >= 11.0 ? 'TRIP' : currentVib >= 7.0 ? 'ALARM' : 'NORMAL',
-      severity: currentVib >= 11.0 ? 'CRITICAL' : 'NORMAL',
-      supportingEvidence: 'Weekly telemetry demonstrates exponential velocity increase leading into trip interlock on 17-Jun-2026.',
-      sourceFile: `Equipment Performance - ${equipmentId}.xlsx`,
-    },
-    {
-      signal: '2X Rotational Harmonic',
-      parameterKey: 'harmonic_2x',
-      observedPattern: `${currentHarmonic.toFixed(2)} mm/s (Peak at 2X shaft rotational speed)`,
-      detectionResult: currentHarmonic >= 5.0 ? 'TRIP' : currentHarmonic >= 3.0 ? 'ALARM' : 'NORMAL',
-      severity: currentHarmonic >= 5.0 ? 'CRITICAL' : 'NORMAL',
-      supportingEvidence: 'FFT spectral dominance at 2X running speed is the classical physical signature of mechanical coupling misalignment.',
-      sourceFile: `Equipment Performance - ${equipmentId}.xlsx`,
-    },
-    {
-      signal: 'Coupling Radial Offset',
-      parameterKey: 'coupling_offset',
-      observedPattern: `${currentOffset.toFixed(3)} mm (6X above 0.050 mm tolerance limit)`,
-      detectionResult: currentOffset >= 0.30 ? 'TRIP' : currentOffset >= 0.05 ? 'ALARM' : 'NORMAL',
-      severity: currentOffset >= 0.30 ? 'CRITICAL' : 'NORMAL',
-      supportingEvidence: 'Laser dial indicator field measurement confirmed severe parallel/angular shaft offset.',
-      sourceFile: `Equipment Performance - ${equipmentId}.xlsx`,
-    },
-    {
-      signal: 'Motor DE Bearing Temp',
-      parameterKey: 'bearing_temperature',
-      observedPattern: `${currentTemp.toFixed(1)} °C (Elevated by friction / reaction force)`,
-      detectionResult: currentTemp >= 95.0 ? 'TRIP' : currentTemp >= 80.0 ? 'ALARM' : 'NORMAL',
-      severity: currentTemp >= 95.0 ? 'CRITICAL' : 'NORMAL',
-      supportingEvidence: 'Bearing metal temperature escalation secondary to severe coupling bending moment.',
-      sourceFile: `Equipment Performance - ${equipmentId}.xlsx`,
-    },
-  ]
+  // Extract parameters from detected problems if active or from latest condition
+  const analysisParams = analysis?.detected_problems?.reduce((acc: any, prob: any) => {
+    return { ...acc, ...(prob.parameters || {}) }
+  }, {}) || {}
 
-  // RCA items
-  const rcaEvidence = [
-    `Overall vibration reached ${currentVib.toFixed(2)} mm/s (vs 7.0 mm/s alarm / 11.0 mm/s trip).`,
-    `2X Harmonic reached ${currentHarmonic.toFixed(2)} mm/s (vs 3.0 mm/s alarm).`,
-    `Coupling offset measured 0.306 mm (vs 0.050 mm OEM alignment limit).`,
-    `Motor baseplate soft-foot measured 0.12 mm on drive-end foot.`,
-    `Coupling elastomer insert aged > 12 months in service with visible fatigue cracking.`,
-  ]
+  const currentVib = Number(
+    analysisParams.vibration ??
+    equipment?.condition_summary?.vibration ??
+    latestTrend?.vibration ??
+    0
+  )
+  const currentHarmonic = Number(
+    analysisParams.harmonic_2x ??
+    equipment?.condition_summary?.harmonic_2x ??
+    latestTrend?.harmonic_2x ??
+    0
+  )
+  const currentOffset = Number(
+    analysisParams.coupling_offset ??
+    equipment?.condition_summary?.coupling_offset ??
+    latestTrend?.coupling_offset ??
+    0
+  )
+  const currentTemp = Number(
+    analysisParams.bearing_temperature ??
+    equipment?.condition_summary?.bearing_temperature ??
+    latestTrend?.bearing_temperature ??
+    0
+  )
+
+  const isBL5702 = equipmentId === 'BL-5702'
+
+  // Construct structured Evidence List dynamically from backend analysis.evidence_layer
+  const evidenceList: EvidenceRecordItem[] = (analysis?.evidence_layer && analysis.evidence_layer.length > 0)
+    ? analysis.evidence_layer.map((item: any) => ({
+        signal: item.parameter,
+        parameterKey: item.parameter_key,
+        observedPattern: `${Number(item.observed_value).toFixed(item.parameter_key === 'coupling_offset' ? 3 : 2)} ${item.unit} (${item.change >= 0 ? '+' : ''}${item.change} from prev)`,
+        detectionResult: (item.severity === 'TRIP' ? 'TRIP' : item.severity === 'ALARM' ? 'ALARM' : item.severity === 'WARNING' ? 'WARNING' : 'NORMAL') as any,
+        severity: (item.severity === 'TRIP' || item.severity === 'CRITICAL' ? 'CRITICAL' : 'NORMAL') as any,
+        supportingEvidence: item.interpretation,
+        sourceFile: item.source || `Equipment Performance - ${equipmentId}.xlsx`,
+      }))
+    : [
+        {
+          signal: 'Overall Vibration',
+          parameterKey: 'vibration',
+          observedPattern: currentVib > 0 ? `${currentVib.toFixed(2)} mm/s` : 'DATA NOT AVAILABLE',
+          detectionResult: (currentVib >= 11.0 ? 'TRIP' : currentVib >= 7.0 ? 'ALARM' : 'NORMAL') as any,
+          severity: (currentVib >= 11.0 ? 'CRITICAL' : 'NORMAL') as any,
+          supportingEvidence: 'Operating within baseline limits.',
+          sourceFile: `Equipment Performance - ${equipmentId}.xlsx`,
+        }
+      ]
+
+  // RCA items derived directly from backend analysis
+  const rcaEvidence = analysis?.rca?.evidence?.length
+    ? analysis.rca.evidence
+    : [
+        `Operating telemetry within baseline specifications.`,
+        `No abnormal spectral vibration harmonics detected.`,
+      ]
 
   const possibleCause =
     analysis?.rca?.primary_root_cause ||
-    'High vibration from coupling misalignment aggravated by 0.12 mm soft-foot and an over-aged elastomer coupling element (>12 months), undetected because periodic laser alignment checks were absent from routine PM and vibration route interval was too long.'
+    'Equipment operating nominally within standard engineering parameters. No active failure mode detected.'
 
-  const confidence = analysis?.rca?.confidence_level || 'HIGH_CONFIDENCE (Verified 4P & 4M+1E Analysis)'
+  const confidence = analysis?.rca?.confidence_level || 'NOMINAL (Normal Operation)'
 
-  const recommendedInspections = [
-    'Inspect coupling spider insert for elastomer hardening, shear tear, or thermal degradation.',
-    'Perform feeler gauge and laser dial check for motor baseplate soft-foot condition (< 0.05 mm tolerance).',
-    'Execute precision laser shaft alignment between blower and motor to < 0.05 mm radial/angular offset.',
-    'Verify post-alignment vibration baseline at 38 T/H full operating load.',
-  ]
+  // Recommended inspections derived dynamically from backend corrective action
+  const recommendedInspections = React.useMemo(() => {
+    if (analysis?.recommendation?.corrective_action) {
+      return analysis.recommendation.corrective_action
+        .split('\n')
+        .map(l => l.replace(/^\d+[\.\)]\s*/, '').trim())
+        .filter(l => l.length > 0)
+    }
+    return [
+      'Continue routine condition monitoring according to plant PM schedule.',
+      'Record baseline vibration and temperature at scheduled route intervals.',
+    ]
+  }, [analysis?.recommendation?.corrective_action])
 
   const physicalChecks: Array<{ code: string; item: string; result: 'G' | 'NG'; evidence: string }> =
     (analysis?.rca?.four_p_verification && analysis.rca.four_p_verification.length > 0)
       ? (analysis.rca.four_p_verification as any)
       : [
-          { code: 'P1', item: 'Overall Vibration', result: 'NG', evidence: 'Elevated to 11.22 mm/s trip threshold — dominant 2X misalignment signature.' },
-          { code: 'P2', item: 'Coupling Alignment', result: 'NG', evidence: 'Offset 0.306 mm vs < 0.050 mm spec — severe parallel/angular misalignment.' },
-          { code: 'P3', item: 'Bearing Condition', result: 'G', evidence: 'Shock-pulse envelope normal — internal bearing race defect eliminated.' },
-          { code: 'P4', item: 'Baseplate Soft-Foot', result: 'NG', evidence: '0.12 mm soft-foot found on motor drive-end foot contributing to deflection.' },
-          { code: 'P5', item: 'Rotor Unbalance', result: 'G', evidence: '1X amplitude normal — rotor mass unbalance eliminated as root cause.' },
+          { code: 'P1', item: 'Overall Vibration', result: 'G', evidence: 'Normal operating amplitude within ISO Zone A limits.' },
+          { code: 'P2', item: 'Coupling Alignment', result: 'G', evidence: 'Within OEM mechanical tolerance limit.' },
+          { code: 'P3', item: 'Bearing Condition', result: 'G', evidence: 'Normal bearing condition, no race defects detected.' },
         ]
 
   // Signal stats calculation from actual trend data

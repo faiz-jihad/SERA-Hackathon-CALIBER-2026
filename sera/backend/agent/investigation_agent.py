@@ -30,11 +30,16 @@ Engineer Review (Human-In-The-Loop)
 END
 """
 
-import os
 from typing import TypedDict, List, Dict, Any, Optional
-from datetime import datetime
 
-from langgraph.graph import StateGraph, START, END
+try:
+    import importlib
+    _lg = importlib.import_module("langgraph.graph")
+    StateGraph = getattr(_lg, "StateGraph")
+    START = getattr(_lg, "START")
+    END = getattr(_lg, "END")
+except Exception:
+    from langgraph.graph import StateGraph, START, END
 
 # Import backend models and database connection
 from database.connection import SessionLocal
@@ -44,11 +49,9 @@ from models.db_models import (
     ProductionRecord,
     DowntimeRecord,
     Incident,
-    DetectedProblem,
-    RCAResult,
     Recommendation,
 )
-from analytics.features import calculate_trend_features, THRESHOLDS
+from analytics.features import calculate_trend_features
 from analytics.detection import detect_problems, _sanitize_for_json
 from analytics.rca import run_rca, find_similar_incidents
 from api.equipment import _condition_to_dict, _incident_to_dict
@@ -197,8 +200,8 @@ def get_downtime_history(equipment_id: str) -> List[Dict[str, Any]]:
         )
         return [
             {
-                "start_time": str(e.start_time) if e.start_time else None,
-                "end_time": str(e.end_time) if e.end_time else None,
+                "start_time": str(e.start_time) if e.start_time is not None else None,
+                "end_time": str(e.end_time) if e.end_time is not None else None,
                 "duration_hours": e.duration_hours,
                 "reason": getattr(e, "cause", None) or getattr(e, "reason", None),
                 "production_loss": e.production_loss,
@@ -519,4 +522,5 @@ def run_sera_investigation(equipment_id: str) -> Dict[str, Any]:
     finally:
         db.close()
 
-    return _sanitize_for_json(result)
+    res = _sanitize_for_json(result)
+    return dict(res) if isinstance(res, dict) else result

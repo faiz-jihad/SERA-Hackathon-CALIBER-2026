@@ -30,6 +30,7 @@ ENV/
 .pip_cache/
 .tmp/
 .pytest_cache/
+.ruff_cache/
 *.log
 
 # Databases & local data state
@@ -49,7 +50,11 @@ sera/frontend/dist/
 *.swp
 *.swo
 
-# OS files
-Thumbs.db
-Desktop.ini
-.DS_Store
+# Workspace Root Junctions (for editor LSP import resolution)
+/database
+/models
+/analytics
+/services
+/ingestion
+/agent
+/api

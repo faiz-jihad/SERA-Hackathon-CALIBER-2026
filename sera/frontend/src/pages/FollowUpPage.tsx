@@ -33,14 +33,14 @@ export const FollowUpPage: React.FC = () => {
     .map(f => f.parameter_deltas?.vibration?.pct_reduction)
     .filter((v): v is number => typeof v === 'number' && !isNaN(v))
   const avgVibReduction = vibReductions.length > 0
-    ? (vibReductions.reduce((a, b) => a + b, 0) / vibReductions.length).toFixed(1)
+    ? (vibReductions.reduce((a, b) => a + Math.abs(b), 0) / vibReductions.length).toFixed(1)
     : null
 
   const offsetReductions = followUps
     .map(f => f.parameter_deltas?.coupling_offset?.pct_reduction)
     .filter((v): v is number => typeof v === 'number' && !isNaN(v))
   const avgOffsetReduction = offsetReductions.length > 0
-    ? (offsetReductions.reduce((a, b) => a + b, 0) / offsetReductions.length).toFixed(1)
+    ? (offsetReductions.reduce((a, b) => a + Math.abs(b), 0) / offsetReductions.length).toFixed(1)
     : null
 
   return (

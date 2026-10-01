@@ -1,15 +1,14 @@
 """
 Equipment API — equipment list, detail, trend, and analysis
 """
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import text
-from typing import Optional
 
 from database.connection import get_db
 from models.db_models import Equipment, EquipmentCondition, ProductionRecord, DowntimeRecord, Incident
 from analytics.features import compute_features, get_latest_condition_summary, THRESHOLDS
-from analytics.equipment_thresholds import get_equipment_config, get_equipment_summary, EQUIPMENT_PARAMETERS
+from analytics.equipment_thresholds import get_equipment_config, EQUIPMENT_PARAMETERS
 from analytics.multi_equipment_analytics import (
     summarize_equipment_condition,
     detect_multi_indicator_change,
@@ -34,14 +33,8 @@ def list_equipment(db: Session = Depends(get_db)):
         )
         cond = {}
         if latest:
-            cond = {
-                "vibration": latest.vibration,
-                "bearing_temperature": latest.bearing_temperature,
-                "coupling_offset": latest.coupling_offset,
-                "harmonic_2x": latest.harmonic_2x,
-                "status": latest.status,
-                "last_reading": str(latest.timestamp),
-            }
+            cond = _condition_to_dict(latest)
+            cond["last_reading"] = str(latest.timestamp)
         result.append({
             "equipment_id": e.equipment_id,
             "name": e.name,
@@ -62,9 +55,9 @@ def get_equipment_overview(db: Session = Depends(get_db)):
     for e in equipments:
         # compute KPIs from downtime and conditions in DB
         downtime_records = db.query(DowntimeRecord).filter(DowntimeRecord.equipment_id == e.equipment_id).all()
-        total_dt = sum(d.duration_hours or 0.0 for d in downtime_records)
-        total_prod = sum(d.production_loss or 0.0 for d in downtime_records)
-        total_fin = sum(d.financial_loss or 0.0 for d in downtime_records)
+        total_dt = sum(float(getattr(d, "duration_hours", 0.0) or 0.0) for d in downtime_records)
+        total_prod = sum(float(getattr(d, "production_loss", 0.0) or 0.0) for d in downtime_records)
+        total_fin = sum(float(getattr(d, "financial_loss", 0.0) or 0.0) for d in downtime_records)
 
         # Latest condition
         latest = (
@@ -83,7 +76,7 @@ def get_equipment_overview(db: Session = Depends(get_db)):
         total_hours = 24 * 7 * max(len(conds), 1)
         avail = round(max(0.0, min(100.0, 100.0 - (total_dt / total_hours * 100.0))), 2) if total_hours > 0 else 100.0
 
-        config = get_equipment_config(e.equipment_id)
+        config = get_equipment_config(str(e.equipment_id))
         summaries.append({
             "equipment_id": e.equipment_id,
             "name": e.name,
@@ -136,9 +129,9 @@ def get_equipment_detail(equipment_id: str, db: Session = Depends(get_db)):
         .filter(DowntimeRecord.equipment_id == equipment_id)
         .all()
     )
-    total_downtime_hours = sum(d.duration_hours or 0 for d in downtime_total)
-    total_prod_loss = sum(d.production_loss or 0 for d in downtime_total)
-    total_fin_loss = sum(d.financial_loss or 0 for d in downtime_total)
+    total_downtime_hours = sum(float(getattr(d, "duration_hours", 0.0) or 0.0) for d in downtime_total)
+    total_prod_loss = sum(float(getattr(d, "production_loss", 0.0) or 0.0) for d in downtime_total)
+    total_fin_loss = sum(float(getattr(d, "financial_loss", 0.0) or 0.0) for d in downtime_total)
 
     # Incident count
     incident_count = db.query(Incident).filter(Incident.equipment_id == equipment_id).count()
@@ -213,7 +206,7 @@ def get_equipment_analysis(equipment_id: str, db: Session = Depends(get_db)):
     from analytics.rca import run_rca, find_similar_incidents
     from analytics.evidence_engine import build_evidence_layer, compute_what_changed
     from analytics.rule_engine import default_rule_engine
-    from models.db_models import DetectedProblem, RCAResult, Recommendation
+    from models.db_models import RCAResult, Recommendation
 
     equip = db.query(Equipment).filter(Equipment.equipment_id == equipment_id.upper()).first()
     if not equip:
@@ -297,7 +290,7 @@ def get_equipment_analysis(equipment_id: str, db: Session = Depends(get_db)):
     rule_evaluation = default_rule_engine.evaluate_condition_record(
         equipment_id.upper(),
         latest_condition_map,
-        equipment_class=equip.equipment_type
+        equipment_class=str(equip.equipment_type) if equip.equipment_type is not None else None
     )
 
     # Latest recommendation (if any)
@@ -356,6 +349,219 @@ def get_equipment_evidence_layer(equipment_id: str, db: Session = Depends(get_db
 
     condition_dicts = [_condition_to_dict(c) for c in conditions]
     return build_evidence_layer(condition_dicts, equipment_id.upper())
+
+
+@router.get("/{equipment_id}/rule-trace")
+def get_equipment_rule_trace(equipment_id: str, db: Session = Depends(get_db)):
+    """
+    Returns the deterministic engineering rules used to evaluate the equipment condition.
+    Every rule provides rule ID, parameter, threshold, unit, source, condition, and resulting status.
+    Allows a reviewer to answer 'Why did SERA classify this condition as ALARM/TRIP?' without reading code.
+    """
+    from analytics.rule_engine import default_rule_engine
+
+    equip = db.query(Equipment).filter(Equipment.equipment_id == equipment_id.upper()).first()
+    if not equip:
+        raise HTTPException(status_code=404, detail=f"Equipment {equipment_id} not found")
+
+    conditions = (
+        db.query(EquipmentCondition)
+        .filter(EquipmentCondition.equipment_id == equipment_id.upper())
+        .order_by(EquipmentCondition.timestamp)
+        .all()
+    )
+    if not conditions:
+        return {
+            "equipment_id": equipment_id.upper(),
+            "status": "NORMAL",
+            "rules_triggered_count": 0,
+            "rules_triggered": [],
+            "reasons": ["No condition records available for rule evaluation."],
+        }
+
+    from services.condition_context import get_condition_context
+    ctx = get_condition_context(equipment_id.upper(), db)
+    target_reading = ctx.get("critical") or ctx.get("current") or _condition_to_dict(conditions[-1])
+
+    rule_eval = default_rule_engine.evaluate_condition_record(
+        equipment_id.upper(),
+        target_reading,
+        equipment_class=str(equip.equipment_type) if equip.equipment_type is not None else None
+    )
+
+    # Format each rule to guarantee exact required fields
+    formatted_rules = []
+    for r in rule_eval.get("rules_triggered", []):
+        formatted_rules.append({
+            "rule_id": r.get("rule_id"),
+            "parameter": r.get("parameter"),
+            "observed_value": r.get("observed_value"),
+            "threshold": r.get("threshold"),
+            "unit": r.get("unit"),
+            "condition": r.get("condition"),
+            "source": r.get("source_reference"),
+            "source_type": r.get("source_type"),
+            "resulting_status": r.get("severity"),
+            "severity": r.get("severity"),
+            "rationale": r.get("rationale"),
+        })
+
+    return {
+        "equipment_id": equipment_id.upper(),
+        "status": rule_eval.get("status", "NORMAL"),
+        "rules_triggered_count": len(formatted_rules),
+        "rules_triggered": formatted_rules,
+        "reasons": rule_eval.get("reasons", []),
+        "evaluated_at": rule_eval.get("evaluated_at"),
+        "evaluated_record_id": target_reading.get("id"),
+        "evaluated_week": target_reading.get("week_number"),
+    }
+
+
+@router.get("/{equipment_id}/condition-context")
+def get_equipment_condition_context_endpoint(equipment_id: str, db: Session = Depends(get_db)):
+    """
+    Returns canonical condition context (baseline, critical, post-maintenance, current).
+    Ensures unified, single-source-of-truth across all decision-support endpoints.
+    """
+    from services.condition_context import get_condition_context
+    ctx = get_condition_context(equipment_id, db)
+    if not ctx.get("has_data"):
+        raise HTTPException(status_code=404, detail=f"Equipment {equipment_id} not found or has no records")
+    return ctx
+
+
+@router.get("/{equipment_id}/verify")
+def get_equipment_verification_alias(equipment_id: str, db: Session = Depends(get_db)):
+    """Alias for /api/follow-up/{equipment_id}/verify providing dynamic post-maintenance comparison."""
+    from api.follow_up import get_equipment_verification_status
+    return get_equipment_verification_status(equipment_id=equipment_id, db=db)
+
+
+@router.get("/{equipment_id}/trends")
+def get_equipment_multi_window_trends(equipment_id: str, db: Session = Depends(get_db)):
+    """
+    Computes rigorous multi-window regression trends (4-week, 8-week, 12-week) on actual database data.
+    Separates 4 weeks, 8 weeks, and 12 weeks with slope, intercept, start, end, % change, direction, and R^2.
+    """
+    from analytics.features import compute_multi_window_trends
+
+    equip = db.query(Equipment).filter(Equipment.equipment_id == equipment_id.upper()).first()
+    if not equip:
+        raise HTTPException(status_code=404, detail=f"Equipment {equipment_id} not found")
+
+    conditions = (
+        db.query(EquipmentCondition)
+        .filter(EquipmentCondition.equipment_id == equipment_id.upper())
+        .order_by(EquipmentCondition.timestamp)
+        .all()
+    )
+    if not conditions:
+        raise HTTPException(status_code=404, detail=f"No condition data for equipment {equipment_id}")
+
+    condition_dicts = [_condition_to_dict(c) for c in conditions]
+    trends = compute_multi_window_trends(condition_dicts)
+
+    return {
+        "equipment_id": equipment_id.upper(),
+        "total_records": trends.get("total_records", len(conditions)),
+        "4_weeks": trends.get("4_weeks", {}),
+        "8_weeks": trends.get("8_weeks", {}),
+        "12_weeks": trends.get("12_weeks", {}),
+    }
+
+
+@router.get("/{equipment_id}/harmonic-analysis")
+def get_equipment_harmonic_analysis(equipment_id: str, db: Session = Depends(get_db)):
+    """
+    Rigorous harmonic analysis for 2X / 1X component ratio.
+    Complies with Requirement 9: If source data does not contain a valid 1X component,
+    returns available: false rather than fabricating values.
+    """
+    from analytics.features import get_harmonic_analysis
+
+    equip = db.query(Equipment).filter(Equipment.equipment_id == equipment_id.upper()).first()
+    if not equip:
+        raise HTTPException(status_code=404, detail=f"Equipment {equipment_id} not found")
+
+    conditions = (
+        db.query(EquipmentCondition)
+        .filter(EquipmentCondition.equipment_id == equipment_id.upper())
+        .order_by(EquipmentCondition.timestamp)
+        .all()
+    )
+    if not conditions:
+        return {
+            "equipment_id": equipment_id.upper(),
+            "available": False,
+            "reason": "No condition records found."
+        }
+
+    condition_dicts = [_condition_to_dict(c) for c in conditions]
+    return get_harmonic_analysis(condition_dicts, equipment_id.upper())
+
+
+@router.get("/{equipment_id}/correlations")
+def get_equipment_correlations(equipment_id: str, db: Session = Depends(get_db)):
+    """
+    Computes empirical statistical correlation across physical telemetry channels using backend data.
+    Provides Pearson and Spearman coefficients without forced targets or claiming causality.
+    """
+    from analytics.features import compute_correlations
+
+    conditions = (
+        db.query(EquipmentCondition)
+        .filter(EquipmentCondition.equipment_id == equipment_id.upper())
+        .order_by(EquipmentCondition.timestamp)
+        .all()
+    )
+    if not conditions:
+        raise HTTPException(status_code=404, detail=f"No condition data for equipment {equipment_id}")
+
+    condition_dicts = [_condition_to_dict(c) for c in conditions]
+    corr_results = compute_correlations(condition_dicts)
+
+    return {
+        "equipment_id": equipment_id.upper(),
+        "total_samples": len(conditions),
+        "correlation_matrix": corr_results.get("matrix", {}),
+        "spearman_matrix": corr_results.get("spearman_matrix", {}),
+        "pairwise_correlations": corr_results.get("pairwise", []),
+        "methodology": "Empirical Pearson product-moment and Spearman rank correlation computed across all observation points."
+    }
+
+
+@router.get("/{equipment_id}/audit-trail")
+def get_equipment_audit_trail(equipment_id: str, limit: int = 50, db: Session = Depends(get_db)):
+    """Retrieve traceable audit log for this equipment asset."""
+    from models.db_models import AuditTrail
+
+    logs = (
+        db.query(AuditTrail)
+        .filter(
+            (AuditTrail.entity_id == equipment_id.upper()) |
+            (AuditTrail.entity == equipment_id.upper()) |
+            (AuditTrail.details.like(f"%{equipment_id.upper()}%"))
+        )
+        .order_by(AuditTrail.timestamp.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return [
+        {
+            "id": str(l.id),
+            "action": l.action,
+            "entity": l.entity,
+            "entity_id": l.entity_id,
+            "user_actor": l.user_actor,
+            "timestamp": str(l.timestamp),
+            "previous_state": l.previous_state,
+            "new_state": l.new_state,
+            "details": l.details,
+        }
+        for l in logs
+    ]
 
 
 @router.get("/{equipment_id}/thresholds")
@@ -617,7 +823,7 @@ def _incident_to_dict(i: Incident) -> dict:
     }
 
 
-def _rec_to_dict(r) -> dict:
+def _rec_to_dict(r) -> Optional[dict]:
     if not r:
         return None
     return {

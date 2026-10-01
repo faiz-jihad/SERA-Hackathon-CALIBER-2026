@@ -51,22 +51,24 @@ except ImportError:
             Recommendation, FollowUp, IngestionLog, Rule
         )
 
-# Dynamically locate raw data directory
 CANDIDATE_PATHS = [
     os.path.join(PROJECT_ROOT, "data", "raw", "Case 2_ Intelligence Manufacturing"),
     os.path.join(PROJECT_ROOT, "data", "Case 2_ Intelligence Manufacturing"),
     os.path.join(PROJECT_ROOT, "data", "raw"),
+    os.path.join(SERA_DIR, "data", "raw", "Case 2_ Intelligence Manufacturing"),
+    os.path.join(SERA_DIR, "data", "raw"),
+    "/data/raw/Case 2_ Intelligence Manufacturing",
+    "/data",
+    "/app/data/raw/Case 2_ Intelligence Manufacturing",
+    "/app/data",
     r"D:\Sera-Hackathon CALIBER 2026\data\raw\Case 2_ Intelligence Manufacturing",
 ]
 
-RAW_BASE = None
+RAW_BASE: str = CANDIDATE_PATHS[0]
 for p in CANDIDATE_PATHS:
     if os.path.exists(p) and os.path.isdir(p):
         RAW_BASE = p
         break
-
-if not RAW_BASE:
-    RAW_BASE = CANDIDATE_PATHS[0]
 
 
 def safe_float(val, default=0.0):
@@ -143,7 +145,7 @@ def run_ingestion():
                     if wk_val is None:
                         continue
                     try:
-                        wk_num = int(wk_val)
+                        wk_num = int(float(str(wk_val)))
                     except (ValueError, TypeError):
                         continue
 
@@ -534,13 +536,30 @@ def run_ingestion():
                 "Elastomer coupling element fatigue & hardening (Confirmed by physical tear)",
                 "Excessive vibration route interval (Monthly schedule missed 48h surge)"
             ],
-            similar_incidents=[
-                {"serial": 154, "ar": "AR-2025-OPP-0185", "tag": "PZ-3313B", "plant": "OPP", "title": "PZ-3313B Coupling Loose", "similarity": 0.94},
-                {"serial": 168, "ar": "AR-2025-OP2-0118", "tag": "PM-2566C", "plant": "OP2", "title": "PM-2566C Coupling Worn Out", "similarity": 0.91},
-                {"serial": 299, "ar": "AR-2026-SMX-0082", "tag": "KO-2904", "plant": "SMX", "title": "KO-2904 Coupling Worn Out", "similarity": 0.88},
-            ]
+            similar_incidents=[]  # Will be populated with dynamically computed similarity below
         )
         db.add(rca)
+        db.commit()
+
+        # Dynamically compute TF-IDF cosine similarity against real ingested incidents
+        from analytics.rca import find_similar_incidents
+        all_inc_objs = db.query(Incident).all()
+        inc_dicts = [
+            {
+                "id": str(i.id),
+                "equipment_id": i.equipment_id,
+                "incident_date": str(i.incident_date),
+                "incident_title": i.incident_title,
+                "problem": i.problem,
+                "root_cause": i.root_cause,
+                "root_cause_category": i.root_cause_category,
+                "corrective_action": i.corrective_action,
+                "preventive_action": i.preventive_action,
+            }
+            for i in all_inc_objs
+        ]
+        dynamic_sim = find_similar_incidents(["High Vibration", "Coupling Misalignment"], "BL-5702", inc_dicts, max_results=5)
+        setattr(rca, "similar_incidents", dynamic_sim)
         db.commit()
 
         # Recommendation (CAPA/PAA from official Slide 9 & 10)
@@ -628,6 +647,24 @@ def run_ingestion():
         db.add(log)
         db.commit()
 
+        # Audit Trail entry
+        from models.db_models import log_audit
+        log_audit(
+            db,
+            action="INGESTION",
+            entity="Database",
+            entity_id="ALL_CASE_2_ASSETS",
+            user_actor="INGESTION_PIPELINE",
+            details={
+                "equipment_count": 5,
+                "conditions_count": total_cond_records,
+                "production_records_count": total_prod_records,
+                "incident_count": inc_count,
+            }
+        )
+
+        total_inserted = 5 + total_cond_records + total_prod_records + inc_count + 1 + 1 + 1
+
         print("\n" + "=" * 70)
         print("SERA DATABASE INGESTION COMPLETED SUCCESSFULLY!")
         print(f"  • Equipment Profiles: 5 assets")
@@ -636,7 +673,26 @@ def run_ingestion():
         print(f"  • Incident Database: {inc_count} real records")
         print(f"  • RCA & Action Plan: AR-2026-OPP-0203 (OPP BL-5702)")
         print(f"  • Post-Repair Verification: Week 22 Baseline Restored")
+        print(f"  • Total Records Inserted: {total_inserted}")
         print("=" * 70)
+
+        return {
+            "status": "success",
+            "equipment": "ALL_CASE_2_EQUIPMENT",
+            "records_inserted": total_inserted,
+            "records_skipped": 0,
+            "records_updated": 0,
+            "errors": [],
+            "breakdown": {
+                "equipment_count": 5,
+                "conditions_count": total_cond_records,
+                "production_records_count": total_prod_records,
+                "incident_records_count": inc_count,
+                "rca_count": 1,
+                "recommendation_count": 1,
+                "follow_up_count": 1
+            }
+        }
 
     except Exception as e:
         db.rollback()

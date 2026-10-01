@@ -151,12 +151,15 @@ export const RecommendationsPage: React.FC = () => {
               <>
                 <WorkOrderCard
                   equipmentId={selectedRec.equipment_id}
-                  workOrderNo={`WO-2026-${selectedRec.equipment_id.replace(/[^0-9]/g, '') || '0101'}`}
+                  equipmentName={`Product Blower ${selectedRec.equipment_id}`}
+                  workOrderNo={`WO-2026-${selectedRec.equipment_id.replace(/[^0-9]/g, '') || '5702'}`}
                   notificationNo={`NOTIF-${selectedRec.equipment_id}-01`}
                   correctiveAction={selectedRec.corrective_action}
                   preventiveAction={selectedRec.preventive_action}
                   priority={selectedRec.review_status === 'REJECTED' ? 'P3 - Medium' : 'P1 - Emergency'}
-                  downtimeHours={4.0}
+                  downtimeHours={selectedRec.equipment_id === 'BL-5702' ? 14.0 : 4.0}
+                  reviewStatus={selectedRec.review_status}
+                  reviewedBy={selectedRec.reviewed_by}
                 />
                 <ReviewPanel
                   recommendationId={selectedRec.id}

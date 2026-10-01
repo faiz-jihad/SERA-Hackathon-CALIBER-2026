@@ -470,6 +470,62 @@ export const listRawFiles = (): Promise<{ files: RawFile[]; total: number }> =>
 export const triggerBatchIngestion = (): Promise<{ status: string; message: string; results?: any }> =>
   api.post('/ingestion/ingest-raw').then(r => r.data)
 
+export interface LiveTelemetryPayload {
+  equipment_id: string
+  timestamp?: string
+  vibration?: number
+  harmonic_2x?: number
+  coupling_offset?: number
+  bearing_temperature?: number
+  production_rate?: number
+  motor_current?: number
+  status?: string
+}
+
+export const postLiveTelemetry = (payload: LiveTelemetryPayload): Promise<{ status: string; message: string; data?: any }> =>
+  api.post('/ingestion/telemetry', payload).then(r => r.data)
+
+export interface WorkOrderData {
+  work_order_number: string
+  notification_number: string
+  order_type: string
+  equipment_id: string
+  equipment_name: string
+  plant: string
+  priority: string
+  sap_system_status: string
+  review_status: string
+  reviewed_by?: string
+  reviewed_at?: string
+  engineer_notes?: string
+  operations: Array<{
+    operation_number: string
+    work_center: string
+    task_description: string
+    assigned_pic: string
+    tolerance_spec: string
+    duration_hours: number
+    completed: boolean
+  }>
+  required_parts: Array<{
+    part_number: string
+    description: string
+    qty: number
+    unit: string
+  }>
+}
+
+export const getRecommendationWorkOrder = (recId: string): Promise<WorkOrderData> =>
+  api.get(`/recommendation/${recId}/work-order`).then(r => r.data)
+
+export const getEquipmentCorrelations = (equipmentId: string): Promise<{
+  equipment_id: string
+  total_samples: number
+  correlation_matrix: Record<string, Record<string, number>>
+  key_findings: string[]
+}> =>
+  api.get(`/equipment/${equipmentId}/correlations`).then(r => r.data)
+
 export const getRawFiles = listRawFiles
 export const getEquipmentList = listEquipment
 export const getIncidents = listIncidents
@@ -486,6 +542,7 @@ export type AnalysisResult = EquipmentAnalysis
 export type FollowUpData = FollowUpRecord
 
 export default api
+
 
 
 

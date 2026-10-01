@@ -132,6 +132,72 @@ CREATE TABLE IF NOT EXISTS recommendations (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Rules table (deterministic rule engine and traceability)
+CREATE TABLE IF NOT EXISTS rules (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    rule_id VARCHAR(100) UNIQUE NOT NULL,
+    equipment_id VARCHAR(50),
+    equipment_class VARCHAR(100),
+    parameter VARCHAR(100) NOT NULL,
+    condition VARCHAR(10) NOT NULL,
+    threshold FLOAT NOT NULL,
+    unit VARCHAR(30),
+    severity VARCHAR(50) NOT NULL,
+    source_type VARCHAR(50) NOT NULL,
+    source_reference VARCHAR(300) NOT NULL,
+    rationale TEXT NOT NULL,
+    active INTEGER DEFAULT 1,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Follow-up and verification table
+CREATE TABLE IF NOT EXISTS follow_ups (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    equipment_id VARCHAR(50) NOT NULL REFERENCES equipment(equipment_id),
+    recommendation_id UUID REFERENCES recommendations(id),
+    maintenance_date TIMESTAMPTZ NOT NULL,
+    action_taken TEXT NOT NULL,
+    before_condition JSONB NOT NULL,
+    after_condition JSONB NOT NULL,
+    verification_result VARCHAR(100) NOT NULL,
+    parameter_deltas JSONB,
+    engineer_notes TEXT,
+    verified_by VARCHAR(200) DEFAULT 'Lead Reliability Engineer',
+    verified_at TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Work Order Recommendations table (Drafts - Not fake SAP)
+CREATE TABLE IF NOT EXISTS work_order_recommendations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    work_order_reference VARCHAR(100) UNIQUE NOT NULL,
+    recommendation_id UUID REFERENCES recommendations(id),
+    equipment VARCHAR(50) NOT NULL REFERENCES equipment(equipment_id),
+    priority VARCHAR(50) NOT NULL,
+    recommended_action TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    required_inspection TEXT NOT NULL,
+    requested_timing VARCHAR(100) NOT NULL,
+    engineer_approval_status VARCHAR(50) DEFAULT 'DRAFT',
+    operations JSONB,
+    required_parts JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Audit Trail table (Full Traceability)
+CREATE TABLE IF NOT EXISTS audit_trail (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    action VARCHAR(100) NOT NULL,
+    entity VARCHAR(100) NOT NULL,
+    entity_id VARCHAR(100) NOT NULL,
+    user_actor VARCHAR(200) DEFAULT 'SYSTEM',
+    timestamp TIMESTAMPTZ DEFAULT NOW(),
+    previous_state JSONB,
+    new_state JSONB,
+    details JSONB
+);
+
 -- Ingestion log
 CREATE TABLE IF NOT EXISTS ingestion_log (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -154,3 +220,7 @@ CREATE INDEX IF NOT EXISTS idx_incidents_equipment_id ON incidents(equipment_id)
 CREATE INDEX IF NOT EXISTS idx_incidents_problem ON incidents(problem);
 CREATE INDEX IF NOT EXISTS idx_detected_problems_equipment_id ON detected_problems(equipment_id);
 CREATE INDEX IF NOT EXISTS idx_recommendations_equipment_id ON recommendations(equipment_id);
+CREATE INDEX IF NOT EXISTS idx_follow_ups_equipment_id ON follow_ups(equipment_id);
+CREATE INDEX IF NOT EXISTS idx_work_orders_equipment ON work_order_recommendations(equipment);
+CREATE INDEX IF NOT EXISTS idx_audit_trail_action ON audit_trail(action);
+CREATE INDEX IF NOT EXISTS idx_audit_trail_entity ON audit_trail(entity, entity_id);

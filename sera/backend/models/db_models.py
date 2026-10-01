@@ -230,3 +230,65 @@ class FollowUp(Base):
     verified_at = Column(DateTime(timezone=True), server_default=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+
+class WorkOrderRecommendation(Base):
+    __tablename__ = "work_order_recommendations"
+
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    work_order_reference = Column(String(100), unique=True, nullable=False)
+    recommendation_id = Column(GUID(), ForeignKey("recommendations.id"), nullable=True)
+    equipment = Column(String(50), ForeignKey("equipment.equipment_id"), nullable=False)
+    priority = Column(String(50), nullable=False)  # CRITICAL, HIGH, MEDIUM, LOW
+    recommended_action = Column(Text, nullable=False)
+    reason = Column(Text, nullable=False)
+    required_inspection = Column(Text, nullable=False)
+    requested_timing = Column(String(100), nullable=False)
+    engineer_approval_status = Column(String(50), default="DRAFT")  # DRAFT, APPROVED, PENDING_REVIEW, REJECTED
+    operations = Column(JSON, nullable=True)
+    required_parts = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class AuditTrail(Base):
+    __tablename__ = "audit_trail"
+
+    id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    action = Column(String(100), nullable=False)  # INGESTION, DETECTION, RECOMMENDATION, REVIEW_ACCEPT, REVIEW_MODIFY, REVIEW_REJECT, WORK_ORDER_DRAFT, VERIFICATION
+    entity = Column(String(100), nullable=False)
+    entity_id = Column(String(100), nullable=False)
+    user_actor = Column(String(200), default="SYSTEM")
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    previous_state = Column(JSON, nullable=True)
+    new_state = Column(JSON, nullable=True)
+    details = Column(JSON, nullable=True)
+
+
+def log_audit(
+    db,
+    action: str,
+    entity: str,
+    entity_id: str,
+    user_actor: str = "SYSTEM",
+    previous_state=None,
+    new_state=None,
+    details=None,
+):
+    """Utility helper to record traceable audit trail entries across the SERA system."""
+    try:
+        entry = AuditTrail(
+            action=action,
+            entity=entity,
+            entity_id=str(entity_id),
+            user_actor=user_actor,
+            previous_state=previous_state,
+            new_state=new_state,
+            details=details,
+        )
+        db.add(entry)
+        db.commit()
+        return entry
+    except Exception as e:
+        print(f"[AUDIT] Warning: could not write audit log: {e}")
+        return None
+

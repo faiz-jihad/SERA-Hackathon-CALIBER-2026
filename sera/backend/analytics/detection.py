@@ -2,46 +2,29 @@
 SERA Problem Detection Engine
 Hybrid: engineering thresholds + trend analysis + anomaly scoring
 """
-from typing import List, Optional
+import math
+import uuid
+from datetime import date, datetime
+from typing import List
 import pandas as pd
 import numpy as np
 
-from analytics.features import compute_features, THRESHOLDS, _classify_level
+from analytics.features import compute_features, THRESHOLDS
 
 
-# ─────────────────────────────────────────────────────────
-# Detection Rules
-# ─────────────────────────────────────────────────────────
-
-PROBLEM_RULES = [
-    {
-        "problem_type": "High Vibration",
-        "severity_fn": lambda r: _vib_severity(r),
-        "check_fn": lambda df, r: _check_high_vibration(df, r),
-    },
-    {
-        "problem_type": "Coupling Misalignment",
-        "severity_fn": lambda r: _coupling_severity(r),
-        "check_fn": lambda df, r: _check_coupling_misalignment(df, r),
-    },
-    {
-        "problem_type": "Bearing Overtemperature",
-        "severity_fn": lambda r: _temp_severity(r),
-        "check_fn": lambda df, r: _check_bearing_overtemp(df, r),
-    },
-    {
-        "problem_type": "Abnormal 2X Harmonic",
-        "severity_fn": lambda r: _harmonic_severity(r),
-        "check_fn": lambda df, r: _check_abnormal_harmonic(df, r),
-    },
-]
+def _get(row, key, default=None):
+    """Safe row getter supporting both dict and Series."""
+    try:
+        val = row[key] if isinstance(row, dict) else row.get(key) if hasattr(row, 'get') else getattr(row, key, default)
+        if val is None or (isinstance(val, float) and np.isnan(val)):
+            return default
+        return val
+    except (KeyError, AttributeError):
+        return default
 
 
 def _sanitize_for_json(obj):
     """Recursively convert numpy types, NaN, datetimes, and UUIDs to Python JSON-safe native types."""
-    import math
-    from datetime import date, datetime
-    import uuid
     if isinstance(obj, dict):
         return {str(k): _sanitize_for_json(v) for k, v in obj.items()}
     elif isinstance(obj, (list, tuple)):
@@ -61,46 +44,11 @@ def _sanitize_for_json(obj):
     return obj
 
 
-def detect_problems(records: List[dict]) -> List[dict]:
-    """
-    Main detection entry point.
-    Returns a list of detected problems with evidence.
-    """
-    if not records:
-        return []
-
-    df = compute_features(records)
-    if df.empty:
-        return []
-
-    detected = []
-    # If a critical or alarm condition occurred in evaluations, evaluate that failure point
-    alarm_or_trip = df[df["status"].astype(str).str.upper().isin(["TRIP", "ALARM", "CRITICAL"])]
-    if not alarm_or_trip.empty:
-        latest = alarm_or_trip.iloc[-1]
-    else:
-        latest = df.iloc[-1]
-
-    for rule in PROBLEM_RULES:
-        result = rule["check_fn"](df, latest)
-        if result["detected"]:
-            severity = rule["severity_fn"](latest)
-            detected.append({
-                "problem_type": rule["problem_type"],
-                "severity": severity,
-                "detected_at": str(latest.get("timestamp") or ""),
-                "evidence": _sanitize_for_json(result["evidence"]),
-                "parameters": _sanitize_for_json(result["parameters"]),
-            })
-
-    return detected
-
-
 # ─────────────────────────────────────────────────────────
 # Individual Check Functions
 # ─────────────────────────────────────────────────────────
 
-def _check_high_vibration(df: pd.DataFrame, latest) -> dict:
+def _check_high_vibration(_df: pd.DataFrame, latest) -> dict:
     """Detect high vibration condition."""
     evidence = []
     parameters = {}
@@ -128,115 +76,120 @@ def _check_high_vibration(df: pd.DataFrame, latest) -> dict:
         if not detected:
             detected = True
 
-    if vib_trend == "increasing":
-        evidence.append("Vibration trend is INCREASING over last 3 measurements")
+    if vib_trend == "increasing" and vib_level in ("WARNING", "ALARM", "CRITICAL"):
+        evidence.append("Consistent upward trend in vibration over recent weeks")
+        if not detected:
+            detected = True
 
-    if alarm_count and alarm_count >= 2:
-        evidence.append(f"Vibration has been above ALARM threshold for {int(alarm_count)} consecutive measurements")
+    if alarm_count is not None and alarm_count >= 2:
+        evidence.append(f"Vibration in alarm/critical state for {alarm_count} consecutive weeks")
         detected = True
 
-    if status in ("ALARM", "TRIP", "CRITICAL"):
-        evidence.append(f"Equipment status = {status}")
+    if status in ("TRIP", "ALARM", "CRITICAL"):
+        evidence.append(f"Condition status flagged as {status}")
         detected = True
 
     return {"detected": detected, "evidence": evidence, "parameters": parameters}
 
 
-def _check_coupling_misalignment(df: pd.DataFrame, latest) -> dict:
-    """Detect coupling misalignment pattern."""
+def _check_coupling_misalignment(_df: pd.DataFrame, latest) -> dict:
+    """Detect coupling misalignment."""
     evidence = []
     parameters = {}
 
+    harmonic_2x = _get(latest, "harmonic_2x")
     coupling = _get(latest, "coupling_offset")
-    harmonic = _get(latest, "harmonic_2x")
     vib = _get(latest, "vibration")
-    coupling_level = _get(latest, "coupling_offset_level", "NORMAL")
-    harmonic_level = _get(latest, "harmonic_2x_level", "NORMAL")
+    status = str(_get(latest, "status", "")).upper()
 
+    parameters["harmonic_2x"] = harmonic_2x
     parameters["coupling_offset"] = coupling
-    parameters["harmonic_2x"] = harmonic
     parameters["vibration"] = vib
 
-    # Misalignment: high coupling + high 2X + high vibration
-    indicators = 0
     detected = False
 
-    if coupling is not None and coupling >= THRESHOLDS["coupling_offset"]["warning"]:
-        evidence.append(f"Coupling offset = {coupling:.3f} mm [Level: {coupling_level}]")
-        indicators += 1
-
-    if harmonic is not None and harmonic >= THRESHOLDS["harmonic_2x"]["warning"]:
-        evidence.append(f"2X Harmonic = {harmonic:.2f} [Level: {harmonic_level}]")
-        indicators += 1
-
-    # Check increasing coupling trend
-    coupling_trend = _get(latest, "coupling_offset_trend", "stable")
-    if coupling_trend == "increasing":
-        evidence.append("Coupling offset trend is INCREASING")
-        indicators += 1
-
-    if vib is not None and vib >= THRESHOLDS["vibration"]["warning"]:
-        evidence.append(f"Overall vibration elevated: {vib:.2f} mm/s")
-        indicators += 1
-
-    if indicators >= 2:
+    if harmonic_2x is not None and harmonic_2x >= THRESHOLDS["harmonic_2x"]["alarm"]:
+        evidence.append(
+            f"2X Harmonic = {harmonic_2x:.2f} mm/s [EXCEEDS ALARM threshold {THRESHOLDS['harmonic_2x']['alarm']} mm/s]"
+        )
         detected = True
-        evidence.append(f"Pattern matches COUPLING MISALIGNMENT signature ({indicators} of 4 indicators)")
+
+    if coupling is not None and coupling >= THRESHOLDS["coupling_offset"]["alarm"]:
+        evidence.append(
+            f"Coupling Offset = {coupling:.3f} mm [EXCEEDS ALARM threshold {THRESHOLDS['coupling_offset']['alarm']} mm]"
+        )
+        detected = True
+
+    if vib is not None and vib >= THRESHOLDS["vibration"]["alarm"] and (
+        (harmonic_2x is not None and harmonic_2x >= THRESHOLDS["harmonic_2x"]["warning"]) or
+        (coupling is not None and coupling >= THRESHOLDS["coupling_offset"]["warning"])
+    ):
+        evidence.append("Combined high vibration with elevated 2X harmonic and/or coupling offset")
+        detected = True
+
+    if status == "TRIP":
+        evidence.append("Operational trip event correlated with high vibration signature")
+        detected = True
 
     return {"detected": detected, "evidence": evidence, "parameters": parameters}
 
 
-def _check_bearing_overtemp(df: pd.DataFrame, latest) -> dict:
+def _check_bearing_overtemp(_df: pd.DataFrame, latest) -> dict:
     """Detect bearing overtemperature."""
     evidence = []
     parameters = {}
 
     temp = _get(latest, "bearing_temperature")
-    temp_change = _get(latest, "bearing_temperature_change")
-    temp_level = _get(latest, "bearing_temperature_level", "NORMAL")
+    temp_change = _get(latest, "temp_change")
+    temp_trend = _get(latest, "temp_trend", "stable")
 
     parameters["bearing_temperature"] = temp
-    parameters["bearing_temperature_change"] = temp_change
-    parameters["bearing_temperature_level"] = temp_level
+    parameters["temp_change"] = temp_change
+    parameters["temp_trend"] = temp_trend
 
     detected = False
 
     if temp is not None and temp >= THRESHOLDS["bearing_temperature"]["alarm"]:
-        evidence.append(f"Bearing temperature = {temp:.1f}°C [EXCEEDS ALARM threshold {THRESHOLDS['bearing_temperature']['alarm']}°C]")
+        evidence.append(
+            f"Bearing temperature = {temp:.1f} °C [EXCEEDS ALARM threshold {THRESHOLDS['bearing_temperature']['alarm']} °C]"
+        )
         detected = True
 
     if temp_change is not None and temp_change > 5.0:
-        evidence.append(f"Bearing temperature increased by {temp_change:.1f}°C in last measurement")
-        if not detected and temp is not None and temp >= THRESHOLDS["bearing_temperature"]["warning"]:
+        evidence.append(f"Bearing temperature jumped by {temp_change:.1f} °C in last measurement")
+        if not detected:
             detected = True
 
-    temp_trend = _get(latest, "bearing_temperature_trend", "stable")
-    if temp_trend == "increasing":
-        evidence.append("Bearing temperature trend is INCREASING")
+    if temp_trend == "increasing" and temp is not None and temp >= THRESHOLDS["bearing_temperature"]["warning"]:
+        evidence.append("Bearing temperature showing continuous upward trend")
+        if not detected:
+            detected = True
 
     return {"detected": detected, "evidence": evidence, "parameters": parameters}
 
 
-def _check_abnormal_harmonic(df: pd.DataFrame, latest) -> dict:
-    """Detect abnormal 2X harmonic (misalignment or looseness)."""
+def _check_abnormal_harmonic(_df: pd.DataFrame, latest) -> dict:
+    """Detect abnormal harmonic patterns."""
     evidence = []
     parameters = {}
 
-    harmonic = _get(latest, "harmonic_2x")
-    harmonic_change = _get(latest, "harmonic_2x_change")
-    harmonic_level = _get(latest, "harmonic_2x_level", "NORMAL")
+    harmonic_2x = _get(latest, "harmonic_2x")
+    harmonic_ratio = _get(latest, "harmonic_ratio")
 
-    parameters["harmonic_2x"] = harmonic
-    parameters["harmonic_2x_change"] = harmonic_change
+    parameters["harmonic_2x"] = harmonic_2x
+    parameters["harmonic_ratio"] = harmonic_ratio
 
     detected = False
 
-    if harmonic is not None and harmonic >= THRESHOLDS["harmonic_2x"]["alarm"]:
-        evidence.append(f"2X Harmonic = {harmonic:.2f} [Level: {harmonic_level}] — indicates resonance or misalignment")
+    if harmonic_2x is not None and harmonic_2x >= THRESHOLDS["harmonic_2x"]["alarm"]:
+        evidence.append(f"2X Harmonic = {harmonic_2x:.2f} mm/s (Alarm: {THRESHOLDS['harmonic_2x']['alarm']} mm/s)")
         detected = True
 
-    if harmonic_change is not None and harmonic_change > 0.5:
-        evidence.append(f"2X Harmonic increased by {harmonic_change:.2f} in last measurement")
+    if harmonic_ratio is not None and harmonic_ratio > 0.40:
+        evidence.append(
+            f"2X Harmonic represents {harmonic_ratio*100:.1f}% of overall vibration [Threshold: 40%]"
+        )
+        detected = True
 
     harmonic_trend = _get(latest, "harmonic_2x_trend", "stable")
     if harmonic_trend == "increasing":
@@ -295,12 +248,64 @@ def _harmonic_severity(row) -> str:
     return "LOW"
 
 
-def _get(row, key, default=None):
-    """Safe row getter supporting both dict and Series."""
-    try:
-        val = row[key] if isinstance(row, dict) else row.get(key) if hasattr(row, 'get') else getattr(row, key, default)
-        if val is None or (isinstance(val, float) and np.isnan(val)):
-            return default
-        return val
-    except (KeyError, AttributeError):
-        return default
+# ─────────────────────────────────────────────────────────
+# Detection Rules
+# ─────────────────────────────────────────────────────────
+
+PROBLEM_RULES = [
+    {
+        "problem_type": "High Vibration",
+        "severity_fn": _vib_severity,
+        "check_fn": _check_high_vibration,
+    },
+    {
+        "problem_type": "Coupling Misalignment",
+        "severity_fn": _coupling_severity,
+        "check_fn": _check_coupling_misalignment,
+    },
+    {
+        "problem_type": "Bearing Overtemperature",
+        "severity_fn": _temp_severity,
+        "check_fn": _check_bearing_overtemp,
+    },
+    {
+        "problem_type": "Abnormal 2X Harmonic",
+        "severity_fn": _harmonic_severity,
+        "check_fn": _check_abnormal_harmonic,
+    },
+]
+
+
+def detect_problems(records: List[dict]) -> List[dict]:
+    """
+    Main detection entry point.
+    Returns a list of detected problems with evidence.
+    """
+    if not records:
+        return []
+
+    df = compute_features(records)
+    if df.empty:
+        return []
+
+    detected = []
+    # If a critical or alarm condition occurred in evaluations, evaluate that failure point
+    alarm_or_trip = df[df["status"].astype(str).str.upper().isin(["TRIP", "ALARM", "CRITICAL"])]
+    if not alarm_or_trip.empty:
+        latest = alarm_or_trip.iloc[-1]
+    else:
+        latest = df.iloc[-1]
+
+    for rule in PROBLEM_RULES:
+        result = rule["check_fn"](df, latest)
+        if result["detected"]:
+            severity = rule["severity_fn"](latest)
+            detected.append({
+                "problem_type": rule["problem_type"],
+                "severity": severity,
+                "detected_at": str(_get(latest, "timestamp") or ""),
+                "evidence": _sanitize_for_json(result["evidence"]),
+                "parameters": _sanitize_for_json(result["parameters"]),
+            })
+
+    return detected

@@ -161,7 +161,7 @@ def run_batch_ingestion():
                 for d in detected:
                     params.update(d.get("parameters", {}))
 
-                similar = find_similar_incidents(prob_types, equip.equipment_id, incident_dicts)
+                similar = find_similar_incidents(prob_types, str(equip.equipment_id), incident_dicts)
                 rca_res = run_rca(prob_types, params, similar)
 
                 rca_rec = RCAResult(
@@ -178,7 +178,7 @@ def run_batch_ingestion():
 
                 # Generate initial AI recommendation
                 ai_rec = generate_recommendation(
-                    equipment_id=equip.equipment_id,
+                    equipment_id=str(equip.equipment_id),
                     problem_types=prob_types,
                     detection_evidence=detected[0]["evidence"] if detected else [],
                     rca_result=rca_res,

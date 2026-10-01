@@ -60,5 +60,6 @@ def init_db():
             import sera.backend.models.db_models  # noqa: F401
     Base.metadata.create_all(bind=engine)
     dialect_name = engine.dialect.name
-    print(f"[DB] Database initialized successfully using {dialect_name} ({DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else DATABASE_URL}).")
+    db_display = str(DATABASE_URL or "")
+    print(f"[DB] Database initialized successfully using {dialect_name} ({db_display.split('@')[-1] if '@' in db_display else db_display}).")
 

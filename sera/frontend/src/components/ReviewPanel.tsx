@@ -3,6 +3,7 @@ import { CheckCircle2, Edit3, XCircle, Send, ShieldAlert, UserCheck, Wrench, Shi
 import { useLanguage } from '../context/LanguageContext'
 import { useAuth } from '../context/AuthContext'
 import StatusBadge from './StatusBadge'
+import soundEffects from '../utils/soundEffects'
 
 export interface ReviewPanelProps {
   recommendationId: string
@@ -76,6 +77,13 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
         reviewed_by: reviewedBy,
         final_action: decision === 'REJECTED' ? 'REJECTED_NO_WORK_ORDER' : finalAction,
       })
+      if (decision === 'ACCEPTED') {
+        soundEffects.playSuccess()
+      } else if (decision === 'MODIFIED') {
+        soundEffects.playWarning()
+      } else {
+        soundEffects.playClick()
+      }
       setSuccessMsg(t('decisionAcceptedSuccess'))
       if (onReviewSubmitted) {
         onReviewSubmitted(res)
@@ -124,7 +132,10 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
           <div className="grid grid-cols-3 gap-2.5">
             <button
               type="button"
-              onClick={() => setDecision('ACCEPTED')}
+              onClick={() => {
+                soundEffects.playClick()
+                setDecision('ACCEPTED')
+              }}
               className={`flex items-center justify-center gap-2 rounded-sm border p-2.5 text-xs font-bold tracking-wide transition-all ${
                 decision === 'ACCEPTED'
                   ? 'border-blue-500 bg-blue-50 text-primary ring-2 ring-blue-200 shadow-xs'
@@ -137,7 +148,10 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
 
             <button
               type="button"
-              onClick={() => setDecision('MODIFIED')}
+              onClick={() => {
+                soundEffects.playClick()
+                setDecision('MODIFIED')
+              }}
               className={`flex items-center justify-center gap-2 rounded-sm border p-2.5 text-xs font-bold tracking-wide transition-all ${
                 decision === 'MODIFIED'
                   ? 'border-amber-500 bg-amber-50 text-amber-800 ring-2 ring-amber-200 shadow-xs'
@@ -150,7 +164,10 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
 
             <button
               type="button"
-              onClick={() => setDecision('REJECTED')}
+              onClick={() => {
+                soundEffects.playClick()
+                setDecision('REJECTED')
+              }}
               className={`flex items-center justify-center gap-2 rounded-sm border p-2.5 text-xs font-bold tracking-wide transition-all ${
                 decision === 'REJECTED'
                   ? 'border-red-500 bg-red-50 text-red-700 ring-2 ring-red-200 shadow-xs'

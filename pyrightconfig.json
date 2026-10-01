@@ -1,0 +1,25 @@
+{
+  "include": [
+    "sera"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    ".venv"
+  ],
+  "extraPaths": [
+    "sera/backend",
+    "sera",
+    "sera/scripts",
+    "./sera/backend",
+    "./sera",
+    "./sera/scripts",
+    "d:/Sera-Hackathon CALIBER 2026/sera/backend",
+    "d:/Sera-Hackathon CALIBER 2026/sera",
+    "d:/Sera-Hackathon CALIBER 2026/sera/scripts"
+  ],
+  "venvPath": ".",
+  "venv": ".venv",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": "none"
+}

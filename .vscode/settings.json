@@ -1,10 +1,28 @@
 {
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
   "python.analysis.extraPaths": [
+    "sera/backend",
+    "sera",
+    "sera/scripts",
     "./sera/backend",
-    "./sera"
+    "./sera",
+    "./sera/scripts",
+    "${workspaceFolder}/sera/backend",
+    "${workspaceFolder}/sera",
+    "${workspaceFolder}/sera/scripts"
   ],
   "python.autoComplete.extraPaths": [
+    "sera/backend",
+    "sera",
+    "sera/scripts",
     "./sera/backend",
-    "./sera"
-  ]
+    "./sera",
+    "./sera/scripts",
+    "${workspaceFolder}/sera/backend",
+    "${workspaceFolder}/sera",
+    "${workspaceFolder}/sera/scripts"
+  ],
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportMissingImports": "none"
+  }
 }

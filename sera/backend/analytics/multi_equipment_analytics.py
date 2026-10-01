@@ -13,13 +13,10 @@ Core functions:
 
 All calculations are deterministic. LLM is not used for primary calculations.
 """
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 import statistics
-import math
-from datetime import datetime
 
 from analytics.equipment_thresholds import (
-    EQUIPMENT_PARAMETERS,
     get_equipment_config,
     get_parameters,
     evaluate_parameter,

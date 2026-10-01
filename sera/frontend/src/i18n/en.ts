@@ -301,7 +301,14 @@ export const en = {
 
   // Dialogs, Modals, Search
   searchModalTitle: "Global Plant Reliability Search",
-  searchModalDesc: "Quickly locate equipment tags, incident histories, and failure modes across Unit 05",
+  searchModalDesc: "Quickly locate equipment tags, incident histories, and failure modes across Orion plant facilities",
+  tabBatchIngestion: "Batch Excel File Ingestion",
+  tabLiveStream: "Live Streaming Telemetry Gateway (SCADA / OPC-UA)",
+  datasetOriginTitle: "Official CALIBER 2026 Case 2 Datasets",
+  datasetOriginDesc: "Data sourced directly from Orion Polypropylene (OPP), Aromatic Plant (ARP), and ZCU Unit facilities. Zero hallucinated records.",
+  liveStreamDesc: "Simulate or transmit live sensor packets from PLC/SCADA to endpoint POST /api/ingestion/telemetry with real-time ISO 10816-3 threshold evaluation.",
+  sendTelemetryBtn: "Transmit Telemetry Packet",
+  telemetrySentSuccess: "Telemetry persisted & asset condition updated successfully",
   typeToSearch: "Type asset tag (e.g. BL-5702, PU-2101B) or keyword...",
   categoryEquipment: "Equipment Assets",
   categoryIncidents: "Historical Incidents",
@@ -349,7 +356,7 @@ export const en = {
   // Dashboard Page
   dashboardBadge: "MANUFACTURING INTELLIGENCE",
   dashboardTitle: "Equipment Health & Reliability Investigation Console",
-  dashboardSubtitle: "Plant Context: Polymer Plant (OPP) & Unit 05 Synthesis Gas Fleet • CALIBER 2026 Case 2",
+  dashboardSubtitle: "Plant Context: Orion Polypropylene Plant (OPP), Aromatic Plant (ARP) & SMX • CALIBER 2026 Case 2",
   dashboardSyncBtn: "SYNC TELEMETRY",
   dashboardKpiMonitored: "Monitored Equipment",
   dashboardKpiMonitoredSub: "Case 2 Critical Rotating Assets",

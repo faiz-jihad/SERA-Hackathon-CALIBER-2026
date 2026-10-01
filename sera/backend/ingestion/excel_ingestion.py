@@ -10,11 +10,10 @@ Handles:
 import os
 import re
 from datetime import datetime, date
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple
 import pandas as pd
 import numpy as np
 from sqlalchemy.orm import Session
-from sqlalchemy import text
 
 from models.db_models import (
     Equipment, EquipmentCondition, ProductionRecord,
@@ -440,7 +439,7 @@ def ingest_equipment_conditions(df: pd.DataFrame, db: Session, equipment_id: str
     if latest_status:
         eq = db.query(Equipment).filter(Equipment.equipment_id == eq_id).first()
         if eq:
-            eq.status = latest_status
+            setattr(eq, "status", latest_status)
 
     db.commit()
     return {"rows_ok": rows_ok, "rows_fail": rows_fail, "errors": errors[:5]}
@@ -690,7 +689,8 @@ def find_header_row(xl: pd.ExcelFile, sheet_name: str) -> Tuple[int, pd.DataFram
     Search first 5 rows to locate the real column header row.
     Handles sheets with title banners (e.g. Incident Database row 1 title, row 3 headers).
     """
-    preview = xl.parse(sheet_name, header=None, nrows=6)
+    raw_preview = xl.parse(sheet_name, header=None, nrows=6)
+    preview = pd.DataFrame(raw_preview) if not isinstance(raw_preview, pd.DataFrame) else raw_preview
     if preview.empty:
         return 0, pd.DataFrame()
 
@@ -707,7 +707,8 @@ def find_header_row(xl: pd.ExcelFile, sheet_name: str) -> Tuple[int, pd.DataFram
             header_row = r_idx
             break
 
-    df = xl.parse(sheet_name, header=header_row)
+    raw_df = xl.parse(sheet_name, header=header_row)
+    df = pd.DataFrame(raw_df) if not isinstance(raw_df, pd.DataFrame) else raw_df
     return header_row, df
 
 
