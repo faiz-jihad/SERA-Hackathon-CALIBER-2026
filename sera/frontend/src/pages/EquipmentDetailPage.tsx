@@ -62,6 +62,20 @@ export const EquipmentDetailPage: React.FC = () => {
   const [reviewStatus, setReviewStatus] = useState<'PENDING' | 'ACCEPTED' | 'MODIFIED' | 'REJECTED'>('PENDING')
   const [reviewNotes, setReviewNotes] = useState<string>('')
 
+  // Recommended inspections derived dynamically from backend corrective action (must be called unconditionally before early returns)
+  const recommendedInspections = React.useMemo(() => {
+    if (analysis?.recommendation?.corrective_action) {
+      return analysis.recommendation.corrective_action
+        .split('\n')
+        .map(l => l.replace(/^\d+[\.\)]\s*/, '').trim())
+        .filter(l => l.length > 0)
+    }
+    return [
+      'Continue routine condition monitoring according to plant PM schedule.',
+      'Record baseline vibration and temperature at scheduled route intervals.',
+    ]
+  }, [analysis?.recommendation?.corrective_action])
+
   const setTab = (tab: SignalTab) => {
     setSearchParams({ tab })
   }
@@ -181,19 +195,7 @@ export const EquipmentDetailPage: React.FC = () => {
 
   const confidence = analysis?.rca?.confidence_level || 'NOMINAL (Normal Operation)'
 
-  // Recommended inspections derived dynamically from backend corrective action
-  const recommendedInspections = React.useMemo(() => {
-    if (analysis?.recommendation?.corrective_action) {
-      return analysis.recommendation.corrective_action
-        .split('\n')
-        .map(l => l.replace(/^\d+[\.\)]\s*/, '').trim())
-        .filter(l => l.length > 0)
-    }
-    return [
-      'Continue routine condition monitoring according to plant PM schedule.',
-      'Record baseline vibration and temperature at scheduled route intervals.',
-    ]
-  }, [analysis?.recommendation?.corrective_action])
+
 
   const physicalChecks: Array<{ code: string; item: string; result: 'G' | 'NG'; evidence: string }> =
     (analysis?.rca?.four_p_verification && analysis.rca.four_p_verification.length > 0)
