@@ -22,11 +22,21 @@ if not DATABASE_URL:
         pg_available = False
 
     if pg_available:
-        DATABASE_URL = "postgresql://sera_user:sera_pass@localhost:5432/sera_db"
+        DATABASE_URL = "postgresql+psycopg2://sera_user:sera_pass@localhost:5432/sera_db"
     else:
         db_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         db_path = os.path.join(db_dir, "sera.db")
         DATABASE_URL = f"sqlite:///{db_path}"
+
+if DATABASE_URL:
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+    elif DATABASE_URL.startswith("postgresql://"):
+        try:
+            import psycopg  # noqa: F401
+        except ImportError:
+            DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
+
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 
