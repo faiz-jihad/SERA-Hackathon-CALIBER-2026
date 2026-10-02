@@ -197,8 +197,11 @@ def _check_coupling_misalignment(_df: pd.DataFrame, latest, thresholds: Optional
         evidence.append("Combined high vibration with elevated 2X harmonic and/or coupling offset")
         detected = True
 
-    if status == "TRIP":
-        evidence.append("Operational trip event correlated with high vibration signature")
+    if status == "TRIP" and (
+        (harmonic_2x is not None and harmonic_2x >= h_warn) or
+        (coupling is not None and coupling >= c_warn)
+    ):
+        evidence.append("Operational trip event correlated with elevated 2X harmonic and/or coupling offset")
         detected = True
 
     return {"detected": detected, "evidence": evidence, "parameters": parameters}
@@ -403,15 +406,28 @@ def detect_problems(records: List[dict], equipment_id: Optional[str] = None) -> 
         latest = df.iloc[-1]
 
     for rule in PROBLEM_RULES:
-        result = rule["check_fn"](df, latest, thresholds)
-        if result["detected"]:
-            severity = rule["severity_fn"](latest, thresholds)
-            detected.append({
-                "problem_type": rule["problem_type"],
-                "severity": severity,
-                "detected_at": str(_get(latest, "timestamp") or ""),
-                "evidence": _sanitize_for_json(result["evidence"]),
-                "parameters": _sanitize_for_json(result["parameters"]),
-            })
+        try:
+            # Resilient invocation supporting both check_fn(df, latest, thresholds) and check_fn(df, latest)
+            try:
+                result = rule["check_fn"](df, latest, thresholds)
+            except TypeError:
+                result = rule["check_fn"](df, latest)
+
+            if isinstance(result, dict) and result.get("detected"):
+                # Resilient invocation supporting both severity_fn(latest, thresholds) and severity_fn(latest)
+                try:
+                    severity = rule["severity_fn"](latest, thresholds)
+                except TypeError:
+                    severity = rule["severity_fn"](latest)
+
+                detected.append({
+                    "problem_type": str(rule.get("problem_type") or "Unknown Problem"),
+                    "severity": str(severity or "MEDIUM"),
+                    "detected_at": str(_get(latest, "timestamp") or _get(latest, "week_number") or ""),
+                    "evidence": _sanitize_for_json(result.get("evidence", [])),
+                    "parameters": _sanitize_for_json(result.get("parameters", {})),
+                })
+        except Exception:
+            continue
 
     return detected
