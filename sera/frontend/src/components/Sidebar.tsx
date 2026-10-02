@@ -81,19 +81,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ sidebarOpen, setSidebarOpen })
         }`}
       >
         {/* Brand */}
-        <div className="border-b border-slate-200 px-4 py-4">
-          <NavLink to="/" className="block">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-7 w-7 items-center justify-center bg-slate-900 text-white font-mono text-xs font-bold rounded-sm flex-shrink-0">
-                S
-              </div>
-              <div>
-                <div className="font-bold text-slate-900 text-sm tracking-tight">SERA</div>
-                <div className="text-[10px] text-slate-500 leading-tight">
-                  {t('brandSubtitle')}
-                </div>
-              </div>
-            </div>
+        <div className="border-b border-slate-200 px-4 py-3.5 flex items-center">
+          <NavLink to="/" className="flex items-center">
+            <img
+              src="/sera-logo.png"
+              alt="SERA"
+              className="h-8 w-auto object-contain"
+            />
           </NavLink>
         </div>
 
