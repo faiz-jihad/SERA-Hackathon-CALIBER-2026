@@ -143,6 +143,12 @@ export const Header: React.FC<HeaderProps> = ({ sidebarOpen, setSidebarOpen }) =
               Orion Polypropylene (OPP)
             </div>
 
+            {/* Production status badge */}
+            <div className="hidden md:flex items-center gap-1.5 border border-emerald-300 bg-emerald-50/80 px-2 py-0.5 rounded-sm text-[10px] font-mono text-emerald-800 font-bold tracking-wider">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              PRODUCTION
+            </div>
+
             {/* Notification */}
             <button
               type="button"

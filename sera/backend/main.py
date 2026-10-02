@@ -82,16 +82,6 @@ app.include_router(audit.router, prefix="/api/audit", tags=["Audit"])
 
 
 
-@app.get("/")
-def root():
-    return {
-        "system": "SERA",
-        "version": "1.0.0",
-        "status": "operational",
-        "description": "System for Equipment Reliability Assessment — CALIBER 2026"
-    }
-
-
 @app.get("/health")
 def health():
     db_connected = False
@@ -129,6 +119,40 @@ def ready():
     except Exception as e:
         from fastapi import HTTPException
         raise HTTPException(status_code=503, detail=f"Service not ready: {str(e)}")
+
+
+# Standalone production UI fallback (serves frontend build directly if present)
+frontend_dist = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "dist")
+if os.path.exists(frontend_dist) and os.path.exists(os.path.join(frontend_dist, "index.html")):
+    from fastapi.staticfiles import StaticFiles
+    from starlette.responses import FileResponse
+
+    assets_dir = os.path.join(frontend_dist, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="spa_assets")
+
+    @app.get("/")
+    def serve_root_ui():
+        return FileResponse(os.path.join(frontend_dist, "index.html"))
+
+    @app.get("/{full_path:path}")
+    def serve_spa_page(full_path: str):
+        if full_path.startswith("api/") or full_path in ("health", "ready", "docs", "redoc", "openapi.json"):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Not Found")
+        target = os.path.join(frontend_dist, full_path)
+        if os.path.isfile(target):
+            return FileResponse(target)
+        return FileResponse(os.path.join(frontend_dist, "index.html"))
+else:
+    @app.get("/")
+    def root():
+        return {
+            "system": "SERA",
+            "version": "1.0.0",
+            "status": "operational",
+            "description": "System for Equipment Reliability Assessment — CALIBER 2026"
+        }
 
 
 if __name__ == "__main__":
