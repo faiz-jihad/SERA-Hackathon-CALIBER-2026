@@ -13,7 +13,7 @@ Zero Hallucination:
 Every threshold has an explicit source_reference and rationale.
 """
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import operator
 
 # Rule Source Priority constants
@@ -329,7 +329,7 @@ class RuleEngine:
             "rules_triggered_count": len(all_triggered),
             "rules_triggered": all_triggered,
             "reasons": reasons,
-            "evaluated_at": datetime.utcnow().isoformat(),
+            "evaluated_at": datetime.now(timezone.utc).isoformat(),
         }
 
 

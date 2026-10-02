@@ -8,7 +8,7 @@ Records post-maintenance condition verification:
 - Lead Engineer verification notes
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -165,12 +165,12 @@ def create_follow_up(
             pass
 
     # Parse maintenance date
-    maint_date = datetime.utcnow()
+    maint_date = datetime.now(timezone.utc)
     if body.maintenance_date:
         try:
             maint_date = datetime.fromisoformat(body.maintenance_date.replace("Z", "+00:00"))
         except Exception:
-            maint_date = datetime.utcnow()
+            maint_date = datetime.now(timezone.utc)
 
     follow_up = FollowUp(
         equipment_id=equipment_id,

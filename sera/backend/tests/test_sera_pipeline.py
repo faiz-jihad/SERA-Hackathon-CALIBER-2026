@@ -25,10 +25,7 @@ except ImportError:
     pytest = None
 import os
 import sys
-import uuid
-from datetime import datetime
-import pandas as pd
-import numpy as np
+from datetime import datetime, timezone
 
 # Ensure backend root is on sys.path
 backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -36,16 +33,16 @@ if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
 from fastapi.testclient import TestClient
-from database.connection import SessionLocal, init_db, engine
+from database.connection import SessionLocal, init_db
 from models.db_models import (
     Equipment, EquipmentCondition, Incident,
-    DetectedProblem, RCAResult, Recommendation, FollowUp, IngestionLog
+    Recommendation, FollowUp
 )
-from analytics.features import compute_features, get_latest_condition_summary, THRESHOLDS
+from analytics.features import compute_features, get_latest_condition_summary
 from analytics.detection import detect_problems
 from analytics.rca import run_rca, find_similar_incidents
 from analytics.evidence_engine import build_evidence_layer, compute_what_changed
-from analytics.rule_engine import RuleEngine, default_rule_engine, SEED_RULES, ISO_DISCLAIMER
+from analytics.rule_engine import default_rule_engine, SEED_RULES
 from services.ai_recommendation import generate_recommendation, _fallback_recommendation
 from main import app
 
@@ -56,7 +53,7 @@ if pytest is not None:
     def setup_database():
         init_db()
         db = SessionLocal()
-        equip_count = db.query(Equipment).count()
+        _ = db.query(Equipment).count()
         db.close()
         yield
 
@@ -923,7 +920,7 @@ def test_bl5702_integration_end_to_end():
             reviewed_by="Lead Reliability Engineer",
             engineer_notes="Approved with immediate laser realignment protocol.",
             final_action="Laser alignment execution confirmed.",
-            reviewed_at=datetime.utcnow()
+            reviewed_at=datetime.now(timezone.utc)
         )
         db.add(rec_model)
         db.commit()
@@ -936,7 +933,7 @@ def test_bl5702_integration_end_to_end():
         fu = FollowUp(
             equipment_id="BL-5702",
             recommendation_id=rec_model.id,
-            maintenance_date=datetime.utcnow(),
+            maintenance_date=datetime.now(timezone.utc),
             action_taken="Laser realignment & flexible coupling replacement",
             before_condition={"vibration": 11.22, "coupling_offset": 0.155, "status": "TRIP"},
             after_condition={"vibration": 3.78, "coupling_offset": 0.022, "status": "NORMAL"},

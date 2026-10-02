@@ -22,10 +22,8 @@ Executes the exact 18-step end-to-end flow on live backend:
 
 Then repeats relevant flow for secondary Case 2 equipment: PU-2101B
 """
-import sys
 import json
 import urllib.request
-import urllib.parse
 
 BASE_URL = "http://127.0.0.1:8000"
 

@@ -7,10 +7,13 @@ from pydantic import BaseModel
 from typing import Optional
 import uuid
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 from database.connection import get_db
-from models.db_models import Equipment, EquipmentCondition, Incident, Recommendation
+from models.db_models import (
+    Equipment, EquipmentCondition, Incident, Recommendation,
+    WorkOrderRecommendation, log_audit
+)
 from analytics.detection import detect_problems
 from analytics.rca import run_rca, find_similar_incidents
 from services.ai_recommendation import generate_recommendation
@@ -200,8 +203,6 @@ def review_recommendation(
     Traceable: Records reviewer, decision, final action, engineer notes, and timestamp.
     The AI never silently becomes the final authority.
     """
-    from models.db_models import WorkOrderRecommendation, log_audit
-
     try:
         rec_uuid = uuid.UUID(rec_id)
     except ValueError:
@@ -225,7 +226,7 @@ def review_recommendation(
     setattr(rec, "review_status", status)
     setattr(rec, "engineer_notes", body.engineer_notes)
     setattr(rec, "reviewed_by", body.reviewed_by or "Lead Reliability Engineer")
-    setattr(rec, "reviewed_at", datetime.utcnow())
+    setattr(rec, "reviewed_at", datetime.now(timezone.utc))
     final_act = body.final_action if status == "MODIFIED" else (rec.corrective_action if status == "ACCEPTED" else None)
     setattr(rec, "final_action", final_act)
 
@@ -306,8 +307,6 @@ def get_recommendation_work_order(rec_id: str, db: Session = Depends(get_db)):
     Returns: work_order_reference, equipment, priority, recommended action, reason,
     required inspection, requested timing, and engineer approval status.
     """
-    from models.db_models import WorkOrderRecommendation
-
     try:
         rec_uuid = uuid.UUID(rec_id)
     except ValueError:

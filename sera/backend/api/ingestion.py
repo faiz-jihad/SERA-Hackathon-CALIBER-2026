@@ -194,7 +194,7 @@ def ingest_live_telemetry(payload: TelemetryPayload, db: Session = Depends(get_d
         raise HTTPException(status_code=404, detail=f"Equipment '{eq_id}' not registered in asset master.")
 
     # Validate timestamp
-    ts = datetime.datetime.utcnow()
+    ts = datetime.datetime.now(datetime.timezone.utc)
     if payload.timestamp:
         try:
             ts = datetime.datetime.fromisoformat(payload.timestamp.replace("Z", "+00:00"))

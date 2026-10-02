@@ -79,6 +79,7 @@ tests = [
     ("30. Follow-Up Verification", test_follow_up_verification),
     ("31. AI Failure Fallback & Resiliency", test_ai_failure_fallback),
     ("32. BL-5702 Full End-to-End Flow", test_bl5702_integration_end_to_end),
+    ("33. All 13 Mandatory API Endpoints", test_all_13_mandatory_api_endpoints),
 ]
 
 passed = 0

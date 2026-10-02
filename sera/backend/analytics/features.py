@@ -320,11 +320,11 @@ def get_harmonic_analysis(records: List[dict], equipment_id: str) -> dict:
     has_1x = "harmonic_1x" in df.columns and df["harmonic_1x"].dropna().count() > 0
     has_2x = "harmonic_2x" in df.columns and df["harmonic_2x"].dropna().count() > 0
 
-    if not has_1x:
+    if not has_1x or not has_2x:
         return {
             "equipment_id": equipment_id,
             "available": False,
-            "reason": "Required 1X component is not available in source data.",
+            "reason": "Required 1X component is not available in source data." if not has_1x else "Required 2X component is not available in source data.",
             "note": "Case 2 dataset provides Overall Vibration (mm/s RMS) and 2X Harmonic (mm/s), but lacks discrete 1X spectral component. Calculation omitted to avoid fabrication."
         }
 

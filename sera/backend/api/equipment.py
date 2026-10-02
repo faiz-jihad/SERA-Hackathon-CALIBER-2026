@@ -550,17 +550,17 @@ def get_equipment_audit_trail(equipment_id: str, limit: int = 50, db: Session = 
 
     return [
         {
-            "id": str(l.id),
-            "action": l.action,
-            "entity": l.entity,
-            "entity_id": l.entity_id,
-            "user_actor": l.user_actor,
-            "timestamp": str(l.timestamp),
-            "previous_state": l.previous_state,
-            "new_state": l.new_state,
-            "details": l.details,
+            "id": str(entry.id),
+            "action": entry.action,
+            "entity": entry.entity,
+            "entity_id": entry.entity_id,
+            "user_actor": entry.user_actor,
+            "timestamp": str(entry.timestamp),
+            "previous_state": entry.previous_state,
+            "new_state": entry.new_state,
+            "details": entry.details,
         }
-        for l in logs
+        for entry in logs
     ]
 
 

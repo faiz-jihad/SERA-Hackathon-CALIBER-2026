@@ -4,7 +4,7 @@ Analysis API — detect problems, run RCA on demand
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 from database.connection import get_db
@@ -57,7 +57,7 @@ def detect_equipment_problems(
     ctx = get_condition_context(eq_id, db)
     target_c = ctx.get("critical") or ctx.get("current") or condition_dicts[-1]
 
-    latest_ts = str(target_c.get("timestamp") or datetime.utcnow().isoformat())
+    latest_ts = str(target_c.get("timestamp") or datetime.now(timezone.utc).isoformat())
 
     # Evaluate deterministic rule engine on target condition
     rule_eval = default_rule_engine.evaluate_condition_record(
