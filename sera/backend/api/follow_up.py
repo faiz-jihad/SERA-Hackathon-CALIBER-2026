@@ -36,8 +36,22 @@ def evaluate_post_maintenance_recovery(before_cond: dict, after_cond: dict, equi
     """
     Dynamically computes verification result and post-maintenance status from actual values.
     VERIFIED_RECOVERED is strictly produced ONLY when measurements confirm return to normal range.
+    Uses equipment-specific thresholds for zero hardcoding.
     """
     from analytics.features import THRESHOLDS
+    from analytics.equipment_thresholds import EQUIPMENT_PARAMETERS
+
+    eq_cfg = EQUIPMENT_PARAMETERS.get(equipment_id.upper(), {}).get("parameters", {}) if equipment_id else {}
+    vib_cfg = eq_cfg.get("vibration") or eq_cfg.get("radial_vibration") or THRESHOLDS.get("vibration", {})
+    offset_cfg = eq_cfg.get("coupling_offset") or THRESHOLDS.get("coupling_offset", {})
+    temp_cfg = eq_cfg.get("bearing_temperature") or THRESHOLDS.get("bearing_temperature", {})
+
+    vib_trip = vib_cfg.get("trip", 11.0)
+    vib_alarm = vib_cfg.get("alarm", 7.0)
+    vib_warn = vib_cfg.get("warning") or (vib_alarm * 0.75 if vib_alarm else 5.0)
+
+    offset_alarm = offset_cfg.get("alarm", 0.05)
+    temp_alarm = temp_cfg.get("alarm", 80.0)
 
     # Check vibration if present
     after_vib = after_cond.get("vibration")
@@ -48,18 +62,17 @@ def evaluate_post_maintenance_recovery(before_cond: dict, after_cond: dict, equi
     if after_vib is not None:
         try:
             vib_f = float(after_vib)
-            if vib_f >= THRESHOLDS["vibration"]["trip"]:
+            if vib_f >= vib_trip:
                 return "UNRESOLVED", "TRIP"
-            elif vib_f >= THRESHOLDS["vibration"]["alarm"]:
+            elif vib_f >= vib_alarm:
                 return "UNRESOLVED", "ALARM"
-            elif vib_f >= THRESHOLDS["vibration"]["warning"]:
+            elif vib_f >= vib_warn:
                 return "PARTIAL_RECOVERY", "WARNING"
             else:
-                # Vibration is below warning (< 5.0 mm/s)
-                # Also verify coupling offset if present
-                if after_offset is not None and float(after_offset) > 0.05:
+                # Vibration is below warning
+                if after_offset is not None and float(after_offset) > offset_alarm:
                     return "PARTIAL_RECOVERY", "WARNING"
-                if after_temp is not None and float(after_temp) > 80.0:
+                if after_temp is not None and float(after_temp) > temp_alarm:
                     return "PARTIAL_RECOVERY", "WARNING"
                 return "VERIFIED_RECOVERED", "NORMAL"
         except (ValueError, TypeError):

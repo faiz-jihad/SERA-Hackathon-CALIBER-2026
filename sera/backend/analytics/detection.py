@@ -5,7 +5,7 @@ Hybrid: engineering thresholds + trend analysis + anomaly scoring
 import math
 import uuid
 from datetime import date, datetime
-from typing import List
+from typing import List, Optional, Dict, Any
 import pandas as pd
 import numpy as np
 
@@ -44,12 +44,66 @@ def _sanitize_for_json(obj):
     return obj
 
 
+def _resolve_thresholds(equipment_id: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
+    """
+    Resolve equipment-specific thresholds dynamically from official equipment registry.
+    Ensures zero hardcoding and full multi-equipment calibration.
+    """
+    base = {
+        "vibration": dict(THRESHOLDS.get("vibration", {})),
+        "harmonic_2x": dict(THRESHOLDS.get("harmonic_2x", {})),
+        "coupling_offset": dict(THRESHOLDS.get("coupling_offset", {})),
+        "bearing_temperature": dict(THRESHOLDS.get("bearing_temperature", {})),
+        "motor_temperature": dict(THRESHOLDS.get("motor_temperature", {})),
+    }
+    if equipment_id:
+        try:
+            from analytics.equipment_thresholds import EQUIPMENT_PARAMETERS
+            eq_cfg = EQUIPMENT_PARAMETERS.get(equipment_id.upper(), {}).get("parameters", {})
+            for param, pinfo in eq_cfg.items():
+                alarm_val = pinfo.get("alarm")
+                trip_val = pinfo.get("trip")
+                warn_val = pinfo.get("warning") or (alarm_val * 0.75 if alarm_val is not None else None)
+                unit_val = pinfo.get("unit", "")
+
+                target_keys = [param]
+                if "vibration" in param:
+                    target_keys.append("vibration")
+                if "harmonic" in param or "2x" in param:
+                    target_keys.append("harmonic_2x")
+                if "offset" in param or "coupling" in param:
+                    target_keys.append("coupling_offset")
+                if "bearing" in param and "temp" in param:
+                    target_keys.append("bearing_temperature")
+
+                for k in target_keys:
+                    if k not in base:
+                        base[k] = {}
+                    if alarm_val is not None:
+                        base[k]["alarm"] = alarm_val
+                    if trip_val is not None:
+                        base[k]["trip"] = trip_val
+                    if warn_val is not None:
+                        base[k]["warning"] = warn_val
+                    if unit_val:
+                        base[k]["unit"] = unit_val
+        except Exception:
+            pass
+    return base
+
+
 # ─────────────────────────────────────────────────────────
-# Individual Check Functions
+# Individual Check Functions (Fully Dynamic)
 # ─────────────────────────────────────────────────────────
 
-def _check_high_vibration(_df: pd.DataFrame, latest) -> dict:
-    """Detect high vibration condition."""
+def _check_high_vibration(_df: pd.DataFrame, latest, thresholds: Optional[dict] = None) -> dict:
+    """Detect high vibration condition using dynamically resolved thresholds."""
+    if thresholds is None:
+        thresholds = THRESHOLDS
+    v_thresh = thresholds.get("vibration", THRESHOLDS.get("vibration", {}))
+    v_alarm = v_thresh.get("alarm", 7.0)
+    v_unit = v_thresh.get("unit", "mm/s")
+
     evidence = []
     parameters = {}
 
@@ -67,12 +121,12 @@ def _check_high_vibration(_df: pd.DataFrame, latest) -> dict:
 
     detected = False
 
-    if vib is not None and vib >= THRESHOLDS["vibration"]["alarm"]:
-        evidence.append(f"Vibration = {vib:.2f} mm/s [EXCEEDS ALARM threshold {THRESHOLDS['vibration']['alarm']} mm/s]")
+    if vib is not None and vib >= v_alarm:
+        evidence.append(f"Vibration = {vib:.2f} {v_unit} [EXCEEDS ALARM threshold {v_alarm} {v_unit}]")
         detected = True
 
-    if vib_change is not None and vib_change > 0.5:
-        evidence.append(f"Vibration increased by {vib_change:.2f} mm/s in last measurement")
+    if vib_change is not None and vib_change > (v_alarm * 0.07 if v_alarm else 0.5):
+        evidence.append(f"Vibration increased by {vib_change:.2f} {v_unit} in last measurement")
         if not detected:
             detected = True
 
@@ -92,8 +146,24 @@ def _check_high_vibration(_df: pd.DataFrame, latest) -> dict:
     return {"detected": detected, "evidence": evidence, "parameters": parameters}
 
 
-def _check_coupling_misalignment(_df: pd.DataFrame, latest) -> dict:
-    """Detect coupling misalignment."""
+def _check_coupling_misalignment(_df: pd.DataFrame, latest, thresholds: Optional[dict] = None) -> dict:
+    """Detect coupling misalignment using dynamically resolved thresholds."""
+    if thresholds is None:
+        thresholds = THRESHOLDS
+    h_thresh = thresholds.get("harmonic_2x", THRESHOLDS.get("harmonic_2x", {}))
+    c_thresh = thresholds.get("coupling_offset", THRESHOLDS.get("coupling_offset", {}))
+    v_thresh = thresholds.get("vibration", THRESHOLDS.get("vibration", {}))
+
+    h_alarm = h_thresh.get("alarm", 3.0)
+    h_warn = h_thresh.get("warning", 2.0)
+    h_unit = h_thresh.get("unit", "mm/s")
+
+    c_alarm = c_thresh.get("alarm", 0.05)
+    c_warn = c_thresh.get("warning", 0.03)
+    c_unit = c_thresh.get("unit", "mm")
+
+    v_alarm = v_thresh.get("alarm", 7.0)
+
     evidence = []
     parameters = {}
 
@@ -108,21 +178,21 @@ def _check_coupling_misalignment(_df: pd.DataFrame, latest) -> dict:
 
     detected = False
 
-    if harmonic_2x is not None and harmonic_2x >= THRESHOLDS["harmonic_2x"]["alarm"]:
+    if harmonic_2x is not None and harmonic_2x >= h_alarm:
         evidence.append(
-            f"2X Harmonic = {harmonic_2x:.2f} mm/s [EXCEEDS ALARM threshold {THRESHOLDS['harmonic_2x']['alarm']} mm/s]"
+            f"2X Harmonic = {harmonic_2x:.2f} {h_unit} [EXCEEDS ALARM threshold {h_alarm} {h_unit}]"
         )
         detected = True
 
-    if coupling is not None and coupling >= THRESHOLDS["coupling_offset"]["alarm"]:
+    if coupling is not None and coupling >= c_alarm:
         evidence.append(
-            f"Coupling Offset = {coupling:.3f} mm [EXCEEDS ALARM threshold {THRESHOLDS['coupling_offset']['alarm']} mm]"
+            f"Coupling Offset = {coupling:.3f} {c_unit} [EXCEEDS ALARM threshold {c_alarm} {c_unit}]"
         )
         detected = True
 
-    if vib is not None and vib >= THRESHOLDS["vibration"]["alarm"] and (
-        (harmonic_2x is not None and harmonic_2x >= THRESHOLDS["harmonic_2x"]["warning"]) or
-        (coupling is not None and coupling >= THRESHOLDS["coupling_offset"]["warning"])
+    if vib is not None and vib >= v_alarm and (
+        (harmonic_2x is not None and harmonic_2x >= h_warn) or
+        (coupling is not None and coupling >= c_warn)
     ):
         evidence.append("Combined high vibration with elevated 2X harmonic and/or coupling offset")
         detected = True
@@ -134,8 +204,15 @@ def _check_coupling_misalignment(_df: pd.DataFrame, latest) -> dict:
     return {"detected": detected, "evidence": evidence, "parameters": parameters}
 
 
-def _check_bearing_overtemp(_df: pd.DataFrame, latest) -> dict:
-    """Detect bearing overtemperature."""
+def _check_bearing_overtemp(_df: pd.DataFrame, latest, thresholds: Optional[dict] = None) -> dict:
+    """Detect bearing overtemperature using dynamically resolved thresholds."""
+    if thresholds is None:
+        thresholds = THRESHOLDS
+    t_thresh = thresholds.get("bearing_temperature", THRESHOLDS.get("bearing_temperature", {}))
+    t_alarm = t_thresh.get("alarm", 80.0)
+    t_warn = t_thresh.get("warning", 70.0)
+    t_unit = t_thresh.get("unit", "°C")
+
     evidence = []
     parameters = {}
 
@@ -149,18 +226,18 @@ def _check_bearing_overtemp(_df: pd.DataFrame, latest) -> dict:
 
     detected = False
 
-    if temp is not None and temp >= THRESHOLDS["bearing_temperature"]["alarm"]:
+    if temp is not None and temp >= t_alarm:
         evidence.append(
-            f"Bearing temperature = {temp:.1f} °C [EXCEEDS ALARM threshold {THRESHOLDS['bearing_temperature']['alarm']} °C]"
+            f"Bearing temperature = {temp:.1f} {t_unit} [EXCEEDS ALARM threshold {t_alarm} {t_unit}]"
         )
         detected = True
 
     if temp_change is not None and temp_change > 5.0:
-        evidence.append(f"Bearing temperature jumped by {temp_change:.1f} °C in last measurement")
+        evidence.append(f"Bearing temperature jumped by {temp_change:.1f} {t_unit} in last measurement")
         if not detected:
             detected = True
 
-    if temp_trend == "increasing" and temp is not None and temp >= THRESHOLDS["bearing_temperature"]["warning"]:
+    if temp_trend == "increasing" and temp is not None and temp >= t_warn:
         evidence.append("Bearing temperature showing continuous upward trend")
         if not detected:
             detected = True
@@ -168,8 +245,14 @@ def _check_bearing_overtemp(_df: pd.DataFrame, latest) -> dict:
     return {"detected": detected, "evidence": evidence, "parameters": parameters}
 
 
-def _check_abnormal_harmonic(_df: pd.DataFrame, latest) -> dict:
-    """Detect abnormal harmonic patterns."""
+def _check_abnormal_harmonic(_df: pd.DataFrame, latest, thresholds: Optional[dict] = None) -> dict:
+    """Detect abnormal harmonic patterns using dynamically resolved thresholds."""
+    if thresholds is None:
+        thresholds = THRESHOLDS
+    h_thresh = thresholds.get("harmonic_2x", THRESHOLDS.get("harmonic_2x", {}))
+    h_alarm = h_thresh.get("alarm", 3.0)
+    h_unit = h_thresh.get("unit", "mm/s")
+
     evidence = []
     parameters = {}
 
@@ -181,8 +264,8 @@ def _check_abnormal_harmonic(_df: pd.DataFrame, latest) -> dict:
 
     detected = False
 
-    if harmonic_2x is not None and harmonic_2x >= THRESHOLDS["harmonic_2x"]["alarm"]:
-        evidence.append(f"2X Harmonic = {harmonic_2x:.2f} mm/s (Alarm: {THRESHOLDS['harmonic_2x']['alarm']} mm/s)")
+    if harmonic_2x is not None and harmonic_2x >= h_alarm:
+        evidence.append(f"2X Harmonic = {harmonic_2x:.2f} {h_unit} (Alarm: {h_alarm} {h_unit})")
         detected = True
 
     if harmonic_ratio is not None and harmonic_ratio > 0.40:
@@ -199,51 +282,64 @@ def _check_abnormal_harmonic(_df: pd.DataFrame, latest) -> dict:
 
 
 # ─────────────────────────────────────────────────────────
-# Severity helpers
+# Dynamic Severity helpers
 # ─────────────────────────────────────────────────────────
 
-def _vib_severity(row) -> str:
+def _vib_severity(row, thresholds: Optional[dict] = None) -> str:
     vib = _get(row, "vibration")
     if vib is None:
         return "LOW"
-    if vib >= THRESHOLDS["vibration"]["trip"]:
+    t = (thresholds or THRESHOLDS).get("vibration", THRESHOLDS.get("vibration", {}))
+    trip = t.get("trip", 11.0)
+    alarm = t.get("alarm", 7.0)
+    warn = t.get("warning", 5.0)
+    if vib >= trip:
         return "CRITICAL"
-    if vib >= THRESHOLDS["vibration"]["alarm"]:
+    if vib >= alarm:
         return "HIGH"
-    if vib >= THRESHOLDS["vibration"]["warning"]:
+    if vib >= warn:
         return "MEDIUM"
     return "LOW"
 
 
-def _coupling_severity(row) -> str:
+def _coupling_severity(row, thresholds: Optional[dict] = None) -> str:
     coupling = _get(row, "coupling_offset")
     if coupling is None:
         return "MEDIUM"
-    if coupling >= THRESHOLDS["coupling_offset"]["trip"]:
+    t = (thresholds or THRESHOLDS).get("coupling_offset", THRESHOLDS.get("coupling_offset", {}))
+    trip = t.get("trip", 0.30)
+    alarm = t.get("alarm", 0.05)
+    if coupling >= trip:
         return "CRITICAL"
-    if coupling >= THRESHOLDS["coupling_offset"]["alarm"]:
+    if coupling >= alarm:
         return "HIGH"
     return "MEDIUM"
 
 
-def _temp_severity(row) -> str:
+def _temp_severity(row, thresholds: Optional[dict] = None) -> str:
     temp = _get(row, "bearing_temperature")
     if temp is None:
         return "MEDIUM"
-    if temp >= THRESHOLDS["bearing_temperature"]["trip"]:
+    t = (thresholds or THRESHOLDS).get("bearing_temperature", THRESHOLDS.get("bearing_temperature", {}))
+    trip = t.get("trip", 95.0)
+    alarm = t.get("alarm", 80.0)
+    if temp >= trip:
         return "CRITICAL"
-    if temp >= THRESHOLDS["bearing_temperature"]["alarm"]:
+    if temp >= alarm:
         return "HIGH"
     return "MEDIUM"
 
 
-def _harmonic_severity(row) -> str:
+def _harmonic_severity(row, thresholds: Optional[dict] = None) -> str:
     h = _get(row, "harmonic_2x")
     if h is None:
         return "LOW"
-    if h >= THRESHOLDS["harmonic_2x"]["trip"]:
+    t = (thresholds or THRESHOLDS).get("harmonic_2x", THRESHOLDS.get("harmonic_2x", {}))
+    trip = t.get("trip", 5.0)
+    alarm = t.get("alarm", 3.0)
+    if h >= trip:
         return "HIGH"
-    if h >= THRESHOLDS["harmonic_2x"]["alarm"]:
+    if h >= alarm:
         return "MEDIUM"
     return "LOW"
 
@@ -276,13 +372,23 @@ PROBLEM_RULES = [
 ]
 
 
-def detect_problems(records: List[dict]) -> List[dict]:
+def detect_problems(records: List[dict], equipment_id: Optional[str] = None) -> List[dict]:
     """
     Main detection entry point.
+    Dynamically resolves equipment-specific thresholds for zero hardcoding.
     Returns a list of detected problems with evidence.
     """
     if not records:
         return []
+
+    # Auto-detect equipment_id from records if not explicitly passed
+    if not equipment_id:
+        for r in records:
+            if isinstance(r, dict) and r.get("equipment_id"):
+                equipment_id = str(r["equipment_id"])
+                break
+
+    thresholds = _resolve_thresholds(equipment_id)
 
     df = compute_features(records)
     if df.empty:
@@ -297,9 +403,9 @@ def detect_problems(records: List[dict]) -> List[dict]:
         latest = df.iloc[-1]
 
     for rule in PROBLEM_RULES:
-        result = rule["check_fn"](df, latest)
+        result = rule["check_fn"](df, latest, thresholds)
         if result["detected"]:
-            severity = rule["severity_fn"](latest)
+            severity = rule["severity_fn"](latest, thresholds)
             detected.append({
                 "problem_type": rule["problem_type"],
                 "severity": severity,

@@ -233,7 +233,8 @@ def get_known_root_cause(equipment_id: str, problem_types: List[str], parameters
 def generate_action_recommendation(equipment_id: str, root_cause: Dict[str, Any]) -> Dict[str, Any]:
     """Synthesize specific corrective and preventive actions for equipment failure mode."""
     primary = root_cause.get("primary") or root_cause.get("primary_root_cause") or ""
-    if "misalignment" in str(primary).lower() or equipment_id == "BL-5702":
+    primary_str = str(primary).lower()
+    if "misalignment" in primary_str or "coupling" in primary_str:
         return {
             "corrective_actions": [
                 "Check and correct coupling alignment to within 0.05 mm radial tolerance using laser alignment system",
@@ -247,22 +248,47 @@ def generate_action_recommendation(equipment_id: str, root_cause: Dict[str, Any]
                 "Review vibration trends more frequently (increase route frequency from monthly to bi-weekly during elevated load periods)",
             ],
             "reasoning": (
-                "Vibration route interval was too long to capture the accelerated rise from 8.50 mm/s to 11.22 mm/s trip. "
-                "The dominant 2X running speed harmonic coupled with elevated radial offset points directly to coupling misalignment "
-                "compounded by soft-foot baseplate distortion."
+                f"Elevated harmonic forcing and radial deflection on {equipment_id} indicate coupling misalignment "
+                "compounded by baseplate distortion or soft-foot."
             ),
+        }
+    elif "seal" in primary_str or "flush" in primary_str or "leak" in primary_str:
+        return {
+            "corrective_actions": [
+                "Inspect mechanical seal faces for thermal degradation, grooving, or leakage",
+                "Clean seal flush plan piping and flush line strainers",
+                "Verify seal buffer fluid pressure and reservoir level",
+            ],
+            "preventive_actions": [
+                "Install automated differential pressure monitoring across seal flush plan",
+                "Implement bi-weekly visual inspections of seal gland area",
+            ],
+            "reasoning": f"Mechanical seal anomalies identified on {equipment_id}. Immediate flush circuit inspection recommended.",
+        }
+    elif "bearing" in primary_str or "lubric" in primary_str or "oil" in primary_str:
+        return {
+            "corrective_actions": [
+                "Perform physical inspection of bearing clearances and lubrication delivery",
+                "Sample and laboratory-test lubrication oil viscosity, water content, and particulate contamination",
+                "Flush and replenish lubricant with certified synthetic grade",
+            ],
+            "preventive_actions": [
+                "Incorporate monthly oil condition sampling into preventive maintenance route",
+                "Calibrate temperature transmitter alarm setpoints per bearing manufacturer guidelines",
+            ],
+            "reasoning": f"Bearing thermal/lubrication stress detected on {equipment_id}. Precision lube analysis advised.",
         }
     else:
         return {
             "corrective_actions": [
-                "Perform immediate physical inspection of equipment bearings and mechanical seals",
-                "Verify lubrication oil quality, viscosity, and grease level",
+                "Perform immediate physical inspection of equipment bearings, seals, and structural foundation",
+                "Verify operating process parameters against design envelope",
             ],
             "preventive_actions": [
-                "Implement online vibration threshold surveillance",
-                "Incorporate lubricant condition sampling into monthly maintenance routine",
+                "Implement continuous condition surveillance and trend monitoring",
+                "Incorporate parameter checks into standard operator rounds",
             ],
-            "reasoning": f"Anomalous parameters detected on {equipment_id}. Immediate inspection recommended.",
+            "reasoning": f"Anomalous parameters detected on {equipment_id}. Engineering investigation recommended.",
         }
 
 

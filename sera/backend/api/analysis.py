@@ -86,7 +86,7 @@ def detect_equipment_problems(
         })
 
     # High-level problem grouping for backwards compatibility
-    detected = detect_problems(condition_dicts)
+    detected = detect_problems(condition_dicts, equipment_id=eq_id)
 
     # Persist detected problems to DB
     saved_ids = []
