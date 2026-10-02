@@ -212,21 +212,25 @@ If Ollama is unavailable, the system falls back to a rule-based recommendation e
 | `/api/analysis/rca` | POST | Run RCA engine |
 | `/api/recommendation` | POST | Generate AI recommendation |
 | `/api/recommendation/{id}/review` | POST | Engineer review |
+| `/api/follow-up` | GET/POST | Post-maintenance verification ("Did It Work?") |
+| `/api/audit` | GET | Tamper-evident audit trail log |
+| `/health` | GET | Liveness probe |
+| `/ready` | GET | Readiness probe |
 
 Interactive docs: http://localhost:8000/docs
 
 ---
 
-## Detection Thresholds
+## Detection Thresholds (CALIBER 2026 Case 2)
 
 | Parameter | Warning | Alarm | Trip |
 |-----------|---------|-------|------|
-| Vibration (mm/s) | 7.1 | 11.0 | 18.0 |
-| 2X Harmonic | 3.0 | 5.0 | 8.0 |
-| Bearing Temp. (°C) | 75 | 85 | 95 |
-| Coupling Offset (mm) | 0.05 | 0.10 | 0.15 |
+| Vibration (mm/s RMS) | 5.0 | 7.0 | 11.0 |
+| 2X Harmonic (mm/s) | 2.0 | 3.0 | 5.0 |
+| Coupling Offset (mm) | 0.03 | 0.05 | 0.15 |
+| Bearing Temp. (°C) | 75.0 | 85.0 | 95.0 |
 
-> Thresholds are configurable in `backend/analytics/features.py`
+> Calibrated per ISO 10816-3 & API 686 in `backend/analytics/features.py`
 
 ---
 

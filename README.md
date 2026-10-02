@@ -6,7 +6,9 @@
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
 [![React 18](https://img.shields.io/badge/Frontend-React%2018%20%7C%20TypeScript-61DAFB.svg)](https://react.dev/)
 [![TailwindCSS](https://img.shields.io/badge/Design-TailAdmin%20Light%20%7C%20Montserrat-38B2AC.svg)](https://tailwindcss.com/)
-[![Tests](https://img.shields.io/badge/Tests-16%2F16%20Passed%20(100%25)-success.svg)](#)
+[![Tests](https://img.shields.io/badge/Unit%20Tests-33%2F33%20Passed%20(100%25)-success.svg)](#)
+[![E2E Acceptance](https://img.shields.io/badge/E2E%20Acceptance-18%2F18%20Passed%20(100%25)-success.svg)](#)
+[![Production](https://img.shields.io/badge/Production-Docker%20%7C%20FastAPI%20%7C%20Nginx-brightgreen.svg)](#)
 
 ---
 
@@ -182,27 +184,55 @@ Frontend UI live at: `http://localhost:5173`.
 
 ---
 
+## 🚀 Production Deployment
+
+SERA is fully configured for zero-friction containerized deployment (Linux/VPS or Windows):
+
+### 1-Command Production Launch:
+```bash
+# Linux VPS / Production Server
+cd sera
+./start-prod.sh
+
+# Windows Workstation
+cd sera
+start-prod.bat
+```
+
+Alternatively, launch the containerized stack directly with Docker Compose:
+```bash
+cd sera
+docker compose up -d --build
+docker compose exec backend python scripts/ingest_official_caliber_data.py
+```
+- **Web UI**: `http://<host>` or `http://<host>:3000`
+- **Backend API & Swagger**: `http://<host>:8000/docs`
+- **Health Probes**: `http://<host>:8000/health` and `/ready`
+
+---
+
 ## 🧪 Testing & Verification
 
-SERA includes a comprehensive compliance test suite verifying all 15 core architectural requirements:
+SERA includes a comprehensive compliance test suite and end-to-end acceptance suite:
 
 ```bash
-cd sera/backend
-python tests/test_sera_pipeline.py
-```
+# 1. Run Complete Pytest Suite (33 Unit & Integration Tests)
+pytest sera/backend/tests
 
-Expected Output:
-```
-==================================================================
-TEST EXECUTION SUMMARY: 16 PASSED, 0 FAILED (TOTAL 16)
-ALL 15 COMPLIANCE & INTEGRATION TEST SUITES PASSED 100%!
-==================================================================
-```
+# 2. Run End-to-End Acceptance Test (18 Sequential Stages across Case 2 Assets)
+python sera/backend/tests/run_e2e_acceptance.py
 
-Frontend production bundle verification:
-```bash
+# 3. Frontend Production Build Verification (TypeScript & Vite)
 cd sera/frontend
 npm run build
+```
+
+Expected Test Results:
+```
+====================== 33 passed in ~40s (100%) ======================
+======================================================================
+END-TO-END ACCEPTANCE TEST COMPLETED SUCCESSFULLY! (18/18 STAGES PASS)
+======================================================================
 ```
 
 ---
