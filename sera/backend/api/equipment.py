@@ -107,14 +107,15 @@ def get_equipment_overview(db: Session = Depends(get_db)):
 @router.get("/{equipment_id}")
 def get_equipment_detail(equipment_id: str, db: Session = Depends(get_db)):
     """Get full equipment detail with current condition summary."""
-    equip = db.query(Equipment).filter(Equipment.equipment_id == equipment_id).first()
+    eq_id = equipment_id.strip().upper()
+    equip = db.query(Equipment).filter(Equipment.equipment_id == eq_id).first()
     if not equip:
         raise HTTPException(status_code=404, detail=f"Equipment {equipment_id} not found")
 
     # Get all condition records
     conditions = (
         db.query(EquipmentCondition)
-        .filter(EquipmentCondition.equipment_id == equipment_id)
+        .filter(EquipmentCondition.equipment_id == eq_id)
         .order_by(EquipmentCondition.timestamp)
         .all()
     )
@@ -126,7 +127,7 @@ def get_equipment_detail(equipment_id: str, db: Session = Depends(get_db)):
     # Downtime summary
     downtime_total = (
         db.query(DowntimeRecord)
-        .filter(DowntimeRecord.equipment_id == equipment_id)
+        .filter(DowntimeRecord.equipment_id == eq_id)
         .all()
     )
     total_downtime_hours = sum(float(getattr(d, "duration_hours", 0.0) or 0.0) for d in downtime_total)
@@ -134,7 +135,7 @@ def get_equipment_detail(equipment_id: str, db: Session = Depends(get_db)):
     total_fin_loss = sum(float(getattr(d, "financial_loss", 0.0) or 0.0) for d in downtime_total)
 
     # Incident count
-    incident_count = db.query(Incident).filter(Incident.equipment_id == equipment_id).count()
+    incident_count = db.query(Incident).filter(Incident.equipment_id == eq_id).count()
 
     return {
         "equipment_id": equip.equipment_id,
@@ -160,13 +161,14 @@ def get_equipment_trend(
     db: Session = Depends(get_db)
 ):
     """Get trend data for charts."""
-    equip = db.query(Equipment).filter(Equipment.equipment_id == equipment_id).first()
+    eq_id = equipment_id.strip().upper()
+    equip = db.query(Equipment).filter(Equipment.equipment_id == eq_id).first()
     if not equip:
         raise HTTPException(status_code=404, detail=f"Equipment {equipment_id} not found")
 
     conditions = (
         db.query(EquipmentCondition)
-        .filter(EquipmentCondition.equipment_id == equipment_id)
+        .filter(EquipmentCondition.equipment_id == eq_id)
         .order_by(EquipmentCondition.timestamp)
         .limit(limit)
         .all()

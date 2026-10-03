@@ -40,14 +40,15 @@ def create_recommendation(
     Generate AI recommendation for equipment.
     Uses structured evidence from detection + RCA engines.
     """
-    equip = db.query(Equipment).filter(Equipment.equipment_id == equipment_id).first()
+    eq_id = equipment_id.strip().upper()
+    equip = db.query(Equipment).filter(Equipment.equipment_id == eq_id).first()
     if not equip:
         raise HTTPException(status_code=404, detail=f"Equipment {equipment_id} not found")
 
     # Get condition data
     conditions = (
         db.query(EquipmentCondition)
-        .filter(EquipmentCondition.equipment_id == equipment_id)
+        .filter(EquipmentCondition.equipment_id == eq_id)
         .order_by(EquipmentCondition.timestamp)
         .all()
     )
